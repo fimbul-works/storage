@@ -1,3 +1,5 @@
+import type { SerializationAdapter } from "./types";
+
 /**
  * Default JSON serialization adapter.
  *
@@ -8,7 +10,7 @@
  * });
  * ```
  */
-export const jsonSerializationAdapter = {
+export const jsonSerializationAdapter: SerializationAdapter<any, string> = {
   /**
    * Serializes an entity to a JSON string.
    *

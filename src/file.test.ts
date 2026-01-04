@@ -1,7 +1,7 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { type FileAdapter, createFileStorage, jsonFileAdapter } from "./file";
+import { createFileStorage, type FileAdapter } from "./file";
 import { DuplicateKeyError, KeyNotFoundError } from "./types";
 
 interface TestUser {
@@ -18,7 +18,7 @@ describe("createFileStorage", () => {
     // Clean up test directory before each test
     try {
       await rm(testDir, { recursive: true, force: true });
-    } catch (e) {
+    } catch (_e) {
       // Directory doesn't exist, that's fine
     }
     // Create a fresh storage instance
@@ -29,7 +29,7 @@ describe("createFileStorage", () => {
     // Clean up test directory after each test
     try {
       await rm(testDir, { recursive: true, force: true });
-    } catch (e) {
+    } catch (_e) {
       // Directory doesn't exist, that's fine
     }
   });

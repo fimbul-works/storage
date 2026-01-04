@@ -40,7 +40,7 @@ describe("createRedisStorage", () => {
         } finally {
           await client.quit();
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignore errors during cleanup
       }
       storage.close();

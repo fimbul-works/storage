@@ -163,10 +163,11 @@ export interface Storage<T, K extends keyof T = keyof T> {
  * Adapter interface for serializing and deserializing entities.
  *
  * @template T - The type of entity to serialize/deserialize
+ * @template F - The serialized type
  *
  * @example
  * ```typescript
- * const jsonAdapter: SerializationAdapter<User> = {
+ * const jsonAdapter: SerializationAdapter<User, string> = {
  *   serialize(user) {
  *     return JSON.stringify(user);
  *   },
@@ -176,22 +177,22 @@ export interface Storage<T, K extends keyof T = keyof T> {
  * };
  * ```
  */
-export interface SerializationAdapter<T = any> {
+export interface SerializationAdapter<T, F = any> {
   /**
    * Serializes an entity to a string.
    *
    * @param {T} entry - The entry to serialize
-   * @returns {string} The serialized string representation of the entry
+   * @returns {F} The serialized string representation of the entry
    */
-  serialize(entry: T): string;
+  serialize(entry: T): F;
 
   /**
    * Deserializes a string back to an entity.
    *
-   * @param {string} str - The string to deserialize
+   * @param {F} data - The string to deserialize
    * @returns {T} The deserialized entity
    */
-  deserialize(str: string): T;
+  deserialize(data: F): T;
 }
 
 /**

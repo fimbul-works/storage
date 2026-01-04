@@ -1,5 +1,4 @@
 import { existsSync, rmSync } from "node:fs";
-import { afterEach } from "node:test";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createFileStorage, createLayeredStorage, createMemoryStorage } from "./index.js";
 
