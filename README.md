@@ -122,7 +122,7 @@ All storage implementations implement the `Storage<T, K>` interface:
 ### Error Types
 
 - **DuplicateKeyError**: Thrown when creating an entry with an existing key
-- **NotFoundError**: Thrown when updating/deleting a non-existent entry
+- **KeyNotFoundError**: Thrown when updating/deleting a non-existent entry
 
 ## Advanced Usage
 

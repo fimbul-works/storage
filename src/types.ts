@@ -199,7 +199,7 @@ export class DuplicateKeyError extends Error {
  *   await storage.update({ id: "non-existent", name: "John" }); // Throws NotFoundError
  *   await storage.delete("non-existent"); // Throws NotFoundError
  * } catch (error) {
- *   if (error instanceof NotFoundError) {
+ *   if (error instanceof KeyNotFoundError) {
  *     console.error("Entry not found");
  *   }
  * }
