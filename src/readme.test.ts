@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { afterEach, describe, expect, it } from "vitest";
-import { type FileAdapter, createFileStorage, createLayeredStorage, createMemoryStorage } from "./index.js";
+import { createFileStorage, createLayeredStorage, createMemoryStorage, type FileAdapter } from "./index.js";
 import { createRedisStorage } from "./redis.js";
 
 interface User {
@@ -75,7 +75,7 @@ describe("README Examples", () => {
     it("should demonstrate layered storage with cache", async () => {
       const cache = createMemoryStorage<User, "id">("id");
       const persistent = createFileStorage<User, "id">("id", { path: "./test-data-readme/users2" });
-      const storage = createLayeredStorage<User, "id">("id", [cache, persistent]);
+      const storage = createLayeredStorage([cache, persistent]);
 
       await storage.create({ id: "2", name: "Jane", email: "jane@example.com" });
 
@@ -93,7 +93,7 @@ describe("README Examples", () => {
     it("should demonstrate layer merging and prioritization", async () => {
       const cache = createMemoryStorage<User, "id">("id");
       const persistent = createFileStorage<User, "id">("id", { path: "./test-data-readme/users3" });
-      const storage = createLayeredStorage<User, "id">("id", [cache, persistent]);
+      const storage = createLayeredStorage([cache, persistent]);
 
       // Create in persistent layer
       await persistent.create({ id: "1", name: "Original", email: "john@example.com" });

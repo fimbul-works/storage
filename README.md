@@ -99,7 +99,7 @@ import { createLayeredStorage, createMemoryStorage, createFileStorage } from '@f
 
 const cache = createMemoryStorage<User, 'id'>('id');
 const persistent = createFileStorage<User, 'id'>('id', { path: './data/users' });
-const storage = createLayeredStorage<User, 'id'>('id', [cache, persistent]);
+const storage = createLayeredStorage([cache, persistent]);
 
 // Reads check layers top-down (cache first)
 const user = await storage.get('1');
@@ -107,6 +107,8 @@ const user = await storage.get('1');
 // Writes persist to all layers
 await storage.create({ id: '2', name: 'Jane', email: 'jane@example.com' });
 ```
+
+All layers must share the same key field, which is automatically determined from the first layer.
 
 **Layer behavior:**
 - **exists/get**: Check layers top-down, return first match
@@ -118,8 +120,9 @@ await storage.create({ id: '2', name: 'Jane', email: 'jane@example.com' });
 
 All storage implementations implement the `Storage<T, K>` interface:
 
-| Method | Description | Returns |
-|--------|-------------|---------|
+| Property/Method | Description | Type/Returns |
+|----------------|-------------|--------------|
+| `keyField` | Read-only field indicating which property is used as the key | `K` |
 | `exists(key)` | Check if entry exists | `Promise<boolean>` |
 | `create(entry)` | Create new entry | `Promise<void>` |
 | `get(key)` | Retrieve entry by key | `Promise<T \| null>` |

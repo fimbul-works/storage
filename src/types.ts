@@ -17,7 +17,13 @@
  * const user = await storage.get("1");
  * ```
  */
-export interface Storage<T = any, K extends keyof T = keyof T> {
+export interface Storage<T, K extends keyof T = keyof T> {
+  /**
+   * Read-only field that is used as the key.
+   * @type {K}
+   */
+  readonly keyField: K;
+
   /**
    * Checks if an entry with the given key exists.
    *
@@ -189,6 +195,40 @@ export interface SerializationAdapter<T = any> {
 }
 
 /**
+ * Interface for key coercion functions to handle type conversions between
+ * storage format (strings) and application format (any type).
+ *
+ * @template T - The type of entity
+ * @template {keyof T} K - The key field of the entity
+ *
+ * @example
+ * ```typescript
+ * interface User {
+ *   id: number;
+ *   name: string;
+ * }
+ *
+ * const coercion: KeyCoercion<User, "id"> = {
+ *   keyFromStorage: (raw) => Number.parseInt(raw, 10),
+ * };
+ * ```
+ */
+export interface KeyCoercion<T, K extends keyof T> {
+  /**
+   * Convert a key from storage format (typically string) to application format.
+   *
+   * @param {string} rawKey - The raw key from storage
+   * @returns {T[K]} The key in the application's expected type
+   *
+   * @example
+   * ```typescript
+   * keyFromStorage: (raw) => Number.parseInt(raw, 10) // "123" -> 123
+   * ```
+   */
+  keyFromStorage?: (rawKey: string) => T[K];
+}
+
+/**
  * Error thrown when attempting to create an entry with a duplicate key.
  *
  * @example
@@ -241,38 +281,4 @@ export class KeyNotFoundError extends Error {
     super(message);
     this.name = "KeyNotFoundError";
   }
-}
-
-/**
- * Interface for key coercion functions to handle type conversions between
- * storage format (strings) and application format (any type).
- *
- * @template T - The type of entity
- * @template {keyof T} K - The key field of the entity
- *
- * @example
- * ```typescript
- * interface User {
- *   id: number;
- *   name: string;
- * }
- *
- * const coercion: KeyCoercion<User, "id"> = {
- *   keyFromStorage: (raw) => Number.parseInt(raw, 10),
- * };
- * ```
- */
-export interface KeyCoercion<T, K extends keyof T> {
-  /**
-   * Convert a key from storage format (typically string) to application format.
-   *
-   * @param {string} rawKey - The raw key from storage
-   * @returns {T[K]} The key in the application's expected type
-   *
-   * @example
-   * ```typescript
-   * keyFromStorage: (raw) => Number.parseInt(raw, 10) // "123" -> 123
-   * ```
-   */
-  keyFromStorage?: (rawKey: string) => T[K];
 }

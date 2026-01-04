@@ -26,6 +26,14 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(keyField: K)
 
   return {
     /**
+     * Read-only field that is used as the key.
+     * @type {K}
+     */
+    get keyField(): K {
+      return keyField;
+    },
+
+    /**
      * Checks if a key exists in the in-memory storage.
      *
      * @param {T[K]} key - The key to check

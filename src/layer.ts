@@ -8,11 +8,15 @@ import { DuplicateKeyError, KeyNotFoundError, type Storage } from "./types.js";
  * - Top layers are fast storage (e.g., in-memory)
  * - Bottom layers are persistent storage (e.g., file, database)
  *
+ * All layers must share the same key field. The key field is automatically
+ * determined from the first layer's `keyField` property.
+ *
  * @template T - The type of entity to store
  * @template {keyof T} K - The key field of the entity
- * @param {K} keyField - The field to use as the unique key
  * @param {Storage<T, K>[]} layers - Array of storage layers ordered from top to bottom
  * @returns {Storage<T, K>} A Storage implementation that combines all layers
+ * @throws {Error} If no layers are provided
+ * @throws {Error} If layers have different key fields
  *
  * @example
  * ```typescript
@@ -26,7 +30,7 @@ import { DuplicateKeyError, KeyNotFoundError, type Storage } from "./types.js";
  * const fileStorage = createFileStorage<User, "id">("./data/users", "id");
  *
  * // Create a layered storage with memory cache on top of file storage
- * const storage = createLayeredStorage<User, "id">("id", [memoryStorage, fileStorage]);
+ * const storage = createLayeredStorage([memoryStorage, fileStorage]);
  *
  * // get() will check memory first, then file
  * const user = await storage.get("1");
@@ -35,12 +39,27 @@ import { DuplicateKeyError, KeyNotFoundError, type Storage } from "./types.js";
  * await storage.create({ id: "2", name: "Jane", email: "jane@example.com" });
  * ```
  */
-export function createLayeredStorage<T, K extends keyof T>(keyField: K, layers: Storage<T, K>[]): Storage<T, K> {
+export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>[]): Storage<T, K> {
   if (layers.length === 0) {
     throw new Error("At least one storage layer is required");
   }
 
+  // Ensure all layers use the same key field
+  const uniqueKeyFields = Array.from(new Set(layers.map((storage) => storage.keyField)));
+  if (uniqueKeyFields.length > 1) {
+    throw new Error(`All layers must have the same key field. Found: ${uniqueKeyFields.join(", ")}`);
+  }
+  const keyField = uniqueKeyFields[0];
+
   return {
+    /**
+     * Read-only field that is used as the key.
+     * @type {K}
+     */
+    get keyField(): K {
+      return keyField;
+    },
+
     /**
      * Checks if a key exists in any layer (top to bottom).
      * Returns true as soon as the key is found in any layer.

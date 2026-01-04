@@ -1,4 +1,4 @@
-import { type RedisArgument, createClient } from "redis";
+import { createClient, type RedisArgument } from "redis";
 import { jsonSerializationAdapter } from "./serialization.js";
 import {
   DuplicateKeyError,
@@ -122,6 +122,14 @@ export async function createRedisStorage<T, K extends keyof T>(
   const makeKey = (key: T[K]): RedisArgument => `${keyPrefix}${key}`;
 
   return {
+    /**
+     * Read-only field that is used as the key.
+     * @type {K}
+     */
+    get keyField(): K {
+      return keyField;
+    },
+
     /**
      * Checks if a key exists in Redis.
      *

@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { jsonSerializationAdapter } from "./serialization.js";
 import {
@@ -154,6 +154,14 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
   const filePattern = createFilePattern();
 
   return {
+    /**
+     * Read-only field that is used as the key.
+     * @type {K}
+     */
+    get keyField(): K {
+      return keyField;
+    },
+
     /**
      * Checks if a file exists for the given key.
      *

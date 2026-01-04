@@ -10,6 +10,39 @@ interface User {
 }
 
 describe("LayeredStorage", () => {
+  describe("key field validation", () => {
+    it("should throw error if layers have different key fields", () => {
+      const storage1 = createMemoryStorage<User, "id">("id");
+      const storage2 = createMemoryStorage<User, "email">("email");
+
+      expect(() => createLayeredStorage([storage1, storage2])).toThrow("All layers must have the same key field");
+    });
+
+    it("should throw error listing the conflicting key fields", () => {
+      const storage1 = createMemoryStorage<User, "id">("id");
+      const storage2 = createMemoryStorage<User, "email">("email");
+      const storage3 = createMemoryStorage<User, "name">("name");
+
+      expect(() => createLayeredStorage([storage1, storage2, storage3])).toThrow();
+    });
+
+    it("should accept layers with the same key field", () => {
+      const storage1 = createMemoryStorage<User, "id">("id");
+      const storage2 = createMemoryStorage<User, "id">("id");
+
+      expect(() => createLayeredStorage([storage1, storage2])).not.toThrow();
+    });
+
+    it("should expose the keyField property from the layers", () => {
+      const storage1 = createMemoryStorage<User, "id">("id");
+      const storage2 = createMemoryStorage<User, "id">("id");
+
+      const layered = createLayeredStorage([storage1, storage2]);
+
+      expect(layered.keyField).toBe("id");
+    });
+  });
+
   let memory1: ReturnType<typeof createMemoryStorage<User, "id">>;
   let memory2: ReturnType<typeof createMemoryStorage<User, "id">>;
   let file: ReturnType<typeof createFileStorage<User, "id">>;
@@ -33,11 +66,11 @@ describe("LayeredStorage", () => {
   });
 
   it("should throw error if no layers provided", () => {
-    expect(() => createLayeredStorage<User, "id">("id", [])).toThrow("At least one storage layer is required");
+    expect(() => createLayeredStorage([])).toThrow("At least one storage layer is required");
   });
 
   it("should check existence across all layers (top to bottom)", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await memory2.create({ id: "1", name: "John", email: "john@example.com" });
 
@@ -46,7 +79,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should return true from top layer if exists in multiple layers", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await memory1.create({ id: "1", name: "John", email: "john@example.com" });
     await memory2.create({ id: "1", name: "Jane", email: "jane@example.com" });
@@ -55,7 +88,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should create entry in all layers", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await storage.create({ id: "1", name: "John", email: "john@example.com" });
 
@@ -64,7 +97,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should throw DuplicateKeyError when creating existing key", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await memory1.create({ id: "1", name: "John", email: "john@example.com" });
 
@@ -74,7 +107,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should get from first matching layer (top to bottom)", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await memory1.create({ id: "1", name: "Memory1", email: "m1@example.com" });
     await memory2.create({ id: "1", name: "Memory2", email: "m2@example.com" });
@@ -84,7 +117,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should fallback to lower layer if not in upper layer", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await memory2.create({ id: "1", name: "Memory2", email: "m2@example.com" });
 
@@ -93,14 +126,14 @@ describe("LayeredStorage", () => {
   });
 
   it("should return null if not found in any layer", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     const user = await storage.get("1");
     expect(user).toBeNull();
   });
 
   it("should get all entries with deduplication (bottom-up merge)", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await memory2.create({ id: "1", name: "Bottom", email: "bottom@example.com" });
     await memory2.create({ id: "2", name: "Bottom2", email: "bottom2@example.com" });
@@ -118,7 +151,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should update entry in all layers that have it", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await memory1.create({ id: "1", name: "Original", email: "original@example.com" });
     await memory2.create({ id: "1", name: "Original", email: "original@example.com" });
@@ -136,7 +169,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should throw NotFoundError when updating non-existent key", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await expect(storage.update({ id: "1", name: "John", email: "john@example.com" })).rejects.toThrow(
       'Key "1" not found',
@@ -144,7 +177,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should delete entry from all layers that have it", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await memory1.create({ id: "1", name: "User1", email: "user1@example.com" });
     await memory2.create({ id: "1", name: "User1", email: "user1@example.com" });
@@ -158,13 +191,13 @@ describe("LayeredStorage", () => {
   });
 
   it("should throw NotFoundError when deleting non-existent key", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+    const storage = createLayeredStorage([memory1, memory2]);
 
     await expect(storage.delete("1")).rejects.toThrow('Key "1" not found');
   });
 
   it("should work with file storage layers", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, file]);
+    const storage = createLayeredStorage([memory1, file]);
 
     await storage.create({ id: "1", name: "John", email: "john@example.com" });
 
@@ -176,7 +209,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should demonstrate cache-aside pattern", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1, file]);
+    const storage = createLayeredStorage([memory1, file]);
 
     // Create in persistent storage
     await file.create({ id: "1", name: "John", email: "john@example.com" });
@@ -199,7 +232,7 @@ describe("LayeredStorage", () => {
   });
 
   it("should work with single layer", async () => {
-    const storage = createLayeredStorage<User, "id">("id", [memory1]);
+    const storage = createLayeredStorage([memory1]);
 
     await storage.create({ id: "1", name: "John", email: "john@example.com" });
 
@@ -223,7 +256,7 @@ describe("LayeredStorage", () => {
       keyFromStorage: (raw) => Number.parseInt(raw, 10),
     });
 
-    const storage = createLayeredStorage<NumericUser, "id">("id", [numMemory, numFile]);
+    const storage = createLayeredStorage([numMemory, numFile]);
 
     // Create in file layer (stores as string "123")
     await numFile.create({ id: 123, name: "File User" });
@@ -251,14 +284,14 @@ describe("LayeredStorage", () => {
 
   describe("getKeys", () => {
     it("should return empty array when no entries exist in any layer", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       const keys = await storage.getKeys();
       expect(keys).toEqual([]);
     });
 
     it("should return unique keys from all layers", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       await memory1.create({ id: "1", name: "John", email: "john@example.com" });
       await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
@@ -272,7 +305,7 @@ describe("LayeredStorage", () => {
     });
 
     it("should deduplicate keys that exist in multiple layers", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       await memory1.create({ id: "1", name: "Top", email: "top@example.com" });
       await memory2.create({ id: "1", name: "Bottom", email: "bottom@example.com" });
@@ -285,7 +318,7 @@ describe("LayeredStorage", () => {
     });
 
     it("should return keys matching getAll", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       await memory1.create({ id: "1", name: "Top", email: "top@example.com" });
       await memory2.create({ id: "2", name: "Bottom", email: "bottom@example.com" });
@@ -301,7 +334,7 @@ describe("LayeredStorage", () => {
 
   describe("streamAll", () => {
     it("should return empty iterator when no entries exist", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       const results: User[] = [];
       for await (const entry of storage.streamAll()) {
@@ -312,7 +345,7 @@ describe("LayeredStorage", () => {
     });
 
     it("should stream all entries from all layers", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       await memory1.create({ id: "1", name: "John", email: "john@example.com" });
       await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
@@ -334,7 +367,7 @@ describe("LayeredStorage", () => {
     });
 
     it("should prioritize entries from top layers", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       await memory1.create({ id: "1", name: "Top", email: "top@example.com" });
       await memory2.create({ id: "1", name: "Bottom", email: "bottom@example.com" });
@@ -355,7 +388,7 @@ describe("LayeredStorage", () => {
     });
 
     it("should return the same data as getAll but streamed", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       await memory1.create({ id: "1", name: "John", email: "john@example.com" });
       await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
@@ -373,7 +406,7 @@ describe("LayeredStorage", () => {
     });
 
     it("should allow early termination", async () => {
-      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+      const storage = createLayeredStorage([memory1, memory2]);
 
       await memory1.create({ id: "1", name: "John", email: "john@example.com" });
       await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
