@@ -4,17 +4,5 @@
     "indentWidth": 2,
     "lineWidth": 120,
     "lineEnding": "lf"
-  },
-  "linter": {
-    "rules": {
-      "suspicious": {
-        "noAssignInExpressions": "off",
-        "noExplicitAny": "off"
-      },
-      "style": {
-        "useSingleVarDeclarator": "off",
-        "noCommaOperator": "off"
-      }
-    }
   }
 }

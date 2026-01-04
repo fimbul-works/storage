@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync } from "node:fs";
-import { readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { jsonSerializationAdapter } from "./serialization.js";
 import {
@@ -178,7 +178,18 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
         throw new DuplicateKeyError(`Key "${entry[keyField]}" already exists`);
       }
 
-      await writeFile(fileName, adapter.serialize(entry));
+      // Use atomic writes
+      const tempName = `${fileName}.tmp`;
+      try {
+        await writeFile(tempName, adapter.serialize(entry));
+        await rename(tempName, fileName);
+      } catch (err) {
+        // Clean up temp file if the write fails before the rename
+        if (existsSync(tempName)) {
+          await rm(tempName);
+        }
+        throw err;
+      }
     },
 
     /**
@@ -274,7 +285,18 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
         throw new KeyNotFoundError(`Key "${entry[keyField]}" not found`);
       }
 
-      await writeFile(fileName, adapter.serialize(entry));
+      // Use atomic writes
+      const tempName = `${fileName}.tmp`;
+      try {
+        await writeFile(tempName, adapter.serialize(entry));
+        await rename(tempName, fileName);
+      } catch (err) {
+        // Clean up temp file if the write fails before the rename
+        if (existsSync(tempName)) {
+          await rm(tempName);
+        }
+        throw err;
+      }
     },
 
     /**
