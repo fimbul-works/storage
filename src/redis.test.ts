@@ -270,6 +270,28 @@ describe("createRedisStorage", () => {
 
       newStorage.close();
     });
+
+    it("should coerce string keys to numbers when configured", async () => {
+      interface NumericUser {
+        id: number;
+        name: string;
+      }
+
+      const numericStorage = await createRedisStorage<NumericUser, "id">("id", {
+        keyFromStorage: (raw) => Number.parseInt(raw, 10),
+      });
+
+      await numericStorage.create({ id: 123, name: "John" });
+      await numericStorage.create({ id: 456, name: "Jane" });
+
+      const keys = await numericStorage.getKeys();
+      expect(keys).toHaveLength(2);
+      expect(keys).toContain(123);
+      expect(keys).toContain(456);
+      expect(keys.every((k) => typeof k === "number")).toBe(true);
+
+      numericStorage.close();
+    });
   });
 
   describe("streamAll", () => {

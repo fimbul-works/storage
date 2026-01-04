@@ -1,6 +1,12 @@
 import { type RedisArgument, createClient } from "redis";
 import { jsonSerializationAdapter } from "./serialization.js";
-import { DuplicateKeyError, KeyNotFoundError, type SerializationAdapter, type Storage } from "./types.js";
+import {
+  DuplicateKeyError,
+  type KeyCoercion,
+  KeyNotFoundError,
+  type SerializationAdapter,
+  type Storage,
+} from "./types.js";
 
 /**
  * Redis storage interface that extends Storage with connection management.
@@ -36,17 +42,19 @@ export interface RedisStorage<T, K extends keyof T> extends Storage<T, K> {
  * Configuration options for Redis storage.
  *
  * @template T - The type of entity to store
+ * @template {keyof T} K - The key field of the entity
  *
  * @example
  * ```typescript
- * const options: RedisStorageOptions<User> = {
+ * const options: RedisStorageOptions<User, "id"> = {
  *   url: "redis://localhost:6379",
  *   keyPrefix: "users:",
  *   serializationAdapter: customAdapter,
+ *   keyFromStorage: (raw) => Number.parseInt(raw, 10),
  * };
  * ```
  */
-export interface RedisStorageOptions<T> {
+export interface RedisStorageOptions<T, K extends keyof T = keyof T> extends KeyCoercion<T, K> {
   /**
    * Redis connection URL.
    */
@@ -96,9 +104,14 @@ export interface RedisStorageOptions<T> {
  */
 export async function createRedisStorage<T, K extends keyof T>(
   keyField: K,
-  options: RedisStorageOptions<T> = {},
+  options: RedisStorageOptions<T, K> = {},
 ): Promise<RedisStorage<T, K>> {
-  const { url, serializationAdapter = jsonSerializationAdapter, keyPrefix = `${String(keyField)}:` } = options;
+  const {
+    url,
+    serializationAdapter = jsonSerializationAdapter,
+    keyPrefix = `${String(keyField)}:`,
+    keyFromStorage = (raw: string) => raw as T[K],
+  } = options;
 
   const client = await createClient({
     url,
@@ -231,10 +244,9 @@ export async function createRedisStorage<T, K extends keyof T>(
           continue;
         }
 
-        // Remove the key prefix from each key
+        // Remove the key prefix from each key and apply coercion
         for (const key of keyBatch) {
-          const strippedKey = key.substring(prefixLength) as T[K];
-          keys.push(strippedKey);
+          keys.push(keyFromStorage(key.substring(prefixLength)));
         }
       }
 

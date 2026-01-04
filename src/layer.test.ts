@@ -1,6 +1,6 @@
-import { existsSync } from "node:fs";
-import { rm } from "node:fs/promises";
-import { beforeEach, describe, expect, it } from "vitest";
+import { existsSync, rmSync } from "node:fs";
+import { afterEach } from "node:test";
+import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { createFileStorage, createLayeredStorage, createMemoryStorage } from "./index.js";
 
 interface User {
@@ -14,15 +14,22 @@ describe("LayeredStorage", () => {
   let memory2: ReturnType<typeof createMemoryStorage<User, "id">>;
   let file: ReturnType<typeof createFileStorage<User, "id">>;
 
-  beforeEach(async () => {
+  // Clean up test directory
+  const removeDataDir = () => {
+    if (existsSync("./test-data")) {
+      rmSync("./test-data", { recursive: true, force: true });
+    }
+  };
+
+  beforeEach(() => {
+    removeDataDir();
     memory1 = createMemoryStorage<User, "id">("id");
     memory2 = createMemoryStorage<User, "id">("id");
+    file = createFileStorage<User, "id">("id", { path: "./test-data/users" });
+  });
 
-    // Clean up test directory
-    if (existsSync("./test-data")) {
-      await rm("./test-data", { recursive: true, force: true });
-    }
-    file = createFileStorage<User, "id">("./test-data/users", "id");
+  afterAll(() => {
+    removeDataDir();
   });
 
   it("should throw error if no layers provided", () => {
@@ -199,6 +206,47 @@ describe("LayeredStorage", () => {
     expect(await storage.exists("1")).toBe(true);
     expect(await storage.get("1")).toEqual({ id: "1", name: "John", email: "john@example.com" });
     expect(await storage.getAll()).toHaveLength(1);
+  });
+
+  it("should coerce keys correctly across layers with different key types", async () => {
+    interface NumericUser {
+      id: number;
+      name: string;
+    }
+
+    // Memory storage uses number keys directly
+    const numMemory = createMemoryStorage<NumericUser, "id">("id");
+
+    // File storage stores keys as strings but coerces them back to numbers
+    const numFile = createFileStorage<NumericUser, "id">("id", {
+      path: "./test-data/numeric-users",
+      keyFromStorage: (raw) => Number.parseInt(raw, 10),
+    });
+
+    const storage = createLayeredStorage<NumericUser, "id">("id", [numMemory, numFile]);
+
+    // Create in file layer (stores as string "123")
+    await numFile.create({ id: 123, name: "File User" });
+
+    // Create in memory layer (stores as number 456)
+    await numMemory.create({ id: 456, name: "Memory User" });
+
+    // getKeys should return coerced numbers from both layers
+    const keys = await storage.getKeys();
+    expect(keys).toHaveLength(2);
+    expect(keys).toContain(123);
+    expect(keys).toContain(456);
+    expect(keys.every((k) => typeof k === "number")).toBe(true);
+
+    // getAll should also work with coerced keys
+    const all = await storage.getAll();
+    expect(all).toHaveLength(2);
+    expect(all).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: 123, name: "File User" }),
+        expect.objectContaining({ id: 456, name: "Memory User" }),
+      ]),
+    );
   });
 
   describe("getKeys", () => {

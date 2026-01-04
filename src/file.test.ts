@@ -12,7 +12,7 @@ interface TestUser {
 
 describe("createFileStorage", () => {
   const testDir = join(__dirname, "test-storage");
-  let storage = createFileStorage<TestUser, "id">(testDir, "id");
+  let storage = createFileStorage<TestUser, "id">("id", { path: testDir });
 
   beforeEach(async () => {
     // Clean up test directory before each test
@@ -22,7 +22,7 @@ describe("createFileStorage", () => {
       // Directory doesn't exist, that's fine
     }
     // Create a fresh storage instance
-    storage = createFileStorage<TestUser, "id">(testDir, "id");
+    storage = createFileStorage<TestUser, "id">("id", { path: testDir });
   });
 
   afterEach(async () => {
@@ -80,7 +80,7 @@ describe("createFileStorage", () => {
       await storage.create(user);
 
       // Create a new storage instance with the same directory
-      const newStorage = createFileStorage<TestUser, "id">(testDir, "id");
+      const newStorage = createFileStorage<TestUser, "id">("id", { path: testDir });
       const retrieved = await newStorage.get("1");
 
       expect(retrieved).toEqual(user);
@@ -193,7 +193,7 @@ describe("createFileStorage", () => {
       await storage.create(user);
 
       // Create a new storage instance with the same directory
-      const newStorage = createFileStorage<TestUser, "id">(testDir, "id");
+      const newStorage = createFileStorage<TestUser, "id">("id", { path: testDir });
       const keys = await newStorage.getKeys();
 
       expect(keys).toHaveLength(1);
@@ -365,7 +365,7 @@ describe("createFileStorage", () => {
       }
 
       // Create a new storage instance with the same directory
-      const newStorage = createFileStorage<TestUser, "id">(testDir, "id");
+      const newStorage = createFileStorage<TestUser, "id">("id", { path: testDir });
 
       const results: TestUser[] = [];
       for await (const entry of newStorage.streamAll()) {
@@ -405,7 +405,7 @@ describe("createFileStorage", () => {
       await storage.update(updatedUser);
 
       // Create a new storage instance with the same directory
-      const newStorage = createFileStorage<TestUser, "id">(testDir, "id");
+      const newStorage = createFileStorage<TestUser, "id">("id", { path: testDir });
       const result = await newStorage.get("1");
 
       expect(result).toEqual(updatedUser);
@@ -448,7 +448,7 @@ describe("createFileStorage", () => {
       await storage.delete("1");
 
       // Create a new storage instance with the same directory
-      const newStorage = createFileStorage<TestUser, "id">(testDir, "id");
+      const newStorage = createFileStorage<TestUser, "id">("id", { path: testDir });
       expect(await newStorage.exists("1")).toBe(false);
     });
   });
@@ -474,7 +474,7 @@ describe("createFileStorage", () => {
         },
       };
 
-      const customStorage = createFileStorage<CustomUser, "id">(testDir, "id", customAdapter);
+      const customStorage = createFileStorage<CustomUser, "id">("id", { path: testDir, adapter: customAdapter });
 
       const user = { id: 1, name: "John" };
       await customStorage.create(user);
@@ -502,7 +502,7 @@ describe("createFileStorage", () => {
         },
       };
 
-      const productStorage = createFileStorage<Product, "sku">(testDir, "sku", productAdapter);
+      const productStorage = createFileStorage<Product, "sku">("sku", { path: testDir, adapter: productAdapter });
 
       const product = { sku: "abc123", name: "Laptop" };
       await productStorage.create(product);
@@ -530,7 +530,7 @@ describe("createFileStorage", () => {
         },
       };
 
-      const docStorage = createFileStorage<Document, "docId">(testDir, "docId", documentAdapter);
+      const docStorage = createFileStorage<Document, "docId">("docId", { path: testDir, adapter: documentAdapter });
 
       const docs = [
         { docId: "abc", title: "Doc A" },
@@ -566,16 +566,85 @@ describe("createFileStorage", () => {
         },
       };
 
-      const itemStorage = createFileStorage<Item, "id">(testDir, "id", itemAdapter);
+      const itemStorage = createFileStorage<Item, "id">("id", {
+        path: testDir,
+        adapter: itemAdapter,
+        keyFromStorage: (raw) => Number.parseInt(raw, 10),
+      });
 
       await itemStorage.create({ id: 1, name: "One" });
       await itemStorage.create({ id: 42, name: "Forty-Two" });
 
       const keys = await itemStorage.getKeys();
       expect(keys).toHaveLength(2);
-      // Keys are extracted from filenames, which contain the padded version
-      expect(keys).toContain("00001");
-      expect(keys).toContain("00042");
+      // Keys are coerced back to numbers from the padded strings
+      expect(keys).toContain(1);
+      expect(keys).toContain(42);
+      expect(keys).toEqual([1, 42]); // Exact match with numbers
+    });
+
+    it("should isolate entries when using different fileName patterns in the same directory", async () => {
+      // Create two storages with different file patterns in the same directory
+      interface UserA {
+        id: string;
+        name: string;
+      }
+
+      interface UserB {
+        id: string;
+        email: string;
+      }
+
+      // Storage A: uses "user_{key}.json" pattern
+      const adapterA: FileAdapter<UserA, "id"> = {
+        encoding: "utf-8",
+        fileName: (key) => `user_${key}.json`,
+        serialize: (entry) => JSON.stringify(entry),
+        deserialize: (str) => JSON.parse(str),
+      };
+
+      // Storage B: uses "profile_{key}.json" pattern
+      const adapterB: FileAdapter<UserB, "id"> = {
+        encoding: "utf-8",
+        fileName: (key) => `profile_${key}.json`,
+        serialize: (entry) => JSON.stringify(entry),
+        deserialize: (str) => JSON.parse(str),
+      };
+
+      const storageA = createFileStorage<UserA, "id">("id", { path: testDir, adapter: adapterA });
+      const storageB = createFileStorage<UserB, "id">("id", { path: testDir, adapter: adapterB });
+
+      // Create entries in both storages
+      await storageA.create({ id: "1", name: "Alice" });
+      await storageB.create({ id: "1", email: "alice@example.com" });
+      await storageA.create({ id: "2", name: "Bob" });
+
+      // Storage A should only see its own files
+      const keysA = await storageA.getKeys();
+      expect(keysA).toHaveLength(2);
+      expect(keysA).toContain("1");
+      expect(keysA).toContain("2");
+
+      const allA = await storageA.getAll();
+      expect(allA).toHaveLength(2);
+      expect(allA.every((entry) => "name" in entry)).toBe(true);
+
+      // Storage B should only see its own files
+      const keysB = await storageB.getKeys();
+      expect(keysB).toHaveLength(1);
+      expect(keysB).toContain("1");
+
+      const allB = await storageB.getAll();
+      expect(allB).toHaveLength(1);
+      expect(allB.every((entry) => "email" in entry)).toBe(true);
+
+      // StreamAll should also respect the pattern
+      const streamedA: UserA[] = [];
+      for await (const entry of storageA.streamAll()) {
+        streamedA.push(entry);
+      }
+      expect(streamedA).toHaveLength(2);
+      expect(streamedA.every((entry) => "name" in entry)).toBe(true);
     });
   });
 
@@ -607,7 +676,7 @@ describe("createFileStorage", () => {
         price: number;
       }
 
-      const productStorage = createFileStorage<Product, "sku">(testDir, "sku");
+      const productStorage = createFileStorage<Product, "sku">("sku", { path: testDir });
 
       const product = { sku: "PROD-001", name: "Laptop", price: 999 };
       await productStorage.create(product);
@@ -626,7 +695,7 @@ describe("createFileStorage", () => {
         array: string[];
       }
 
-      const complexStorage = createFileStorage<ComplexObject, "id">(testDir, "id");
+      const complexStorage = createFileStorage<ComplexObject, "id">("id", { path: testDir });
 
       const complexObj = {
         id: "1",
@@ -657,7 +726,7 @@ describe("createFileStorage", () => {
         date: string;
       }
 
-      const typedStorage = createFileStorage<TypedData, "id">(testDir, "id");
+      const typedStorage = createFileStorage<TypedData, "id">("id", { path: testDir });
 
       const data = {
         id: "1",

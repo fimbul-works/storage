@@ -5,7 +5,6 @@ A type-safe, abstract storage system for TypeScript with a unified interface for
 ## Features
 
 - 🔷 **Type-safe** — Full TypeScript support with generics
-- ⚙️ **Unified API** — Consistent interface across all backends
 - 🗄️ **Multiple Backends** — In-memory, file-based, Redis, and layered storage
 - 🔌 **Custom Serialization** — Pluggable adapters for different data formats
 - ⚠️ **Error Handling** — Specific error types for duplicate keys and missing entries
@@ -57,9 +56,9 @@ const storage = createMemoryStorage<User, 'id'>('id');
 Persistent storage using the filesystem. Each entity is stored as a separate file.
 
 ```typescript
-import { createFileStorage, jsonFileAdapter } from '@fimbul-works/storage';
+import { createFileStorage } from '@fimbul-works/storage';
 
-const storage = createFileStorage<User, 'id'>('./data/users', 'id', jsonFileAdapter);
+const storage = createFileStorage<User, 'id'>('id', { path: './data/users' });
 await storage.create({ id: '1', name: 'John', email: 'john@example.com' });
 // Creates: ./data/users/1.json
 ```
@@ -90,7 +89,7 @@ Combine backends for cache-aside patterns. Layers are ordered top to bottom (fas
 import { createLayeredStorage, createMemoryStorage, createFileStorage } from '@fimbul-works/storage';
 
 const cache = createMemoryStorage<User, 'id'>('id');
-const persistent = createFileStorage<User, 'id'>('./data/users', 'id');
+const persistent = createFileStorage<User, 'id'>('id', { path: './data/users' });
 const storage = createLayeredStorage<User, 'id'>('id', [cache, persistent]);
 
 // Reads check layers top-down (cache first)
@@ -104,7 +103,7 @@ await storage.create({ id: '2', name: 'Jane', email: 'jane@example.com' });
 - **exists/get**: Check layers top-down, return first match
 - **create/update**: Write to all layers
 - **delete**: Remove from all layers that have the key
-- **getAll**: Merge all layers (top layer wins for duplicates)
+- **getAll/streamAll/getKeys**: Merge all layers (top layer wins for duplicates)
 
 ## API Reference
 
@@ -143,7 +142,7 @@ const csvAdapter: FileAdapter<User, 'id'> = {
   },
 };
 
-const storage = createFileStorage('./data/users', 'id', csvAdapter);
+const storage = createFileStorage('id', { path: './data/users', adapter: csvAdapter });
 ```
 
 ### Different Key Fields
@@ -164,7 +163,7 @@ await storage.create({ sku: 'ABC123', name: 'Widget', price: 9.99 });
 For large datasets, use `streamAll()` to process entries efficiently without loading everything into memory:
 
 ```typescript
-const storage = createFileStorage<User, 'id'>('./data/users', 'id');
+const storage = createFileStorage<User, 'id'>('id', { path: './data/users' });
 
 // Process users one at a time
 for await (const user of storage.streamAll()) {
@@ -186,16 +185,46 @@ for await (const user of storage.streamAll()) {
 Sometimes you only need the keys without loading the full entries:
 
 ```typescript
-const storage = createFileStorage<User, 'id'>('./data/users', 'id');
+const storage = createFileStorage<User, 'id'>('id', { path: './data/users' });
 
 // Get all user IDs
 const userIds = await storage.getKeys();
 console.log(`Found ${userIds.length} users`);
 ```
 
+### Key Type Coercion
+
+File and Redis storage store keys as strings, but your application might use numbers or other types. Use `keyFromStorage` to convert keys back to your application type:
+
+```typescript
+interface User {
+  id: number;  // Application uses numbers
+  name: string;
+}
+
+// File storage with number keys
+const storage = createFileStorage<User, 'id'>('id', {
+  path: './data/users',
+  keyFromStorage: (raw) => Number.parseInt(raw, 10),
+});
+
+await storage.create({ id: 123, name: 'John' });
+const keys = await storage.getKeys();  // Returns [123] as number[]
+
+// Redis storage with number keys
+const redisStorage = await createRedisStorage<User, 'id'>('id', {
+  url: 'redis://localhost:6379',
+  keyFromStorage: (raw) => Number.parseInt(raw, 10),
+});
+
+await redisStorage.create({ id: 456, name: 'Jane' });
+const redisKeys = await redisStorage.getKeys();  // Returns [456] as number[]
+redisStorage.close();
+```
+
 ## License
 
-MIT
+MIT License - See [LICENSE](LICENSE) file for details.
 
 ---
 

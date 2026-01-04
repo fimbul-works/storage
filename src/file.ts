@@ -2,7 +2,13 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { jsonSerializationAdapter } from "./serialization.js";
-import { DuplicateKeyError, KeyNotFoundError, type SerializationAdapter, type Storage } from "./types.js";
+import {
+  DuplicateKeyError,
+  type KeyCoercion,
+  KeyNotFoundError,
+  type SerializationAdapter,
+  type Storage,
+} from "./types.js";
 
 /**
  * Adapter interface for file-based storage with custom serialization and file naming.
@@ -61,35 +67,68 @@ export const jsonFileAdapter: FileAdapter = {
 };
 
 /**
+ * Configuration options for file-based storage.
+ *
+ * @template T - The type of entity to store
+ * @template {keyof T} K - The key field of the entity
+ *
+ * @example
+ * ```typescript
+ * const options: FileStorageOptions<User, "id"> = {
+ *   path: "./data/users",
+ *   adapter: customFileAdapter,
+ *   keyFromStorage: (raw) => Number.parseInt(raw, 10),
+ * };
+ * ```
+ */
+export interface FileStorageOptions<T, K extends keyof T = keyof T> extends KeyCoercion<T, K> {
+  /**
+   * The directory path where files will be stored.
+   * The directory will be created automatically if it doesn't exist.
+   */
+  path: string;
+
+  /**
+   * The file adapter to use for serialization and file naming.
+   * @defaults to JSON file adapter
+   */
+  adapter?: FileAdapter<T, K>;
+}
+
+/**
  * Creates a file-based storage implementation where each entry is stored as a separate file.
  * The directory will be created automatically if it doesn't exist.
  * Each entry is stored as a separate file named according to the adapter's fileName function.
  *
  * @template T - The type of entity to store
  * @template {keyof T} K - The key field of the entity
- * @param {string} path - The directory path where files will be stored
  * @param {K} keyField - The field to use as the unique key
- * @param {FileAdapter} adapter - The file adapter to use for serialization (defaults to JSON)
+ * @param {FileStorageOptions} options - Configuration options (path is required)
  * @returns {Storage<T, K>} A Storage implementation backed by the filesystem
  *
  * @example
  * ```typescript
  * interface User {
- *   id: string;
+ *   id: number;
  *   name: string;
  *   email: string;
  * }
  *
- * const storage = createFileStorage<User, "id">("./data/users", "id");
- * await storage.create({ id: "1", name: "John", email: "john@example.com" });
+ * const storage = createFileStorage<User, "id">("id", {
+ *   path: "./data/users",
+ *   keyFromStorage: (raw) => Number.parseInt(raw, 10),
+ * });
+ * await storage.create({ id: 1, name: "John", email: "john@example.com" });
  * // Creates file: ./data/users/1.json
+ * await storage.getKeys(); // Returns [1, 2, 3] as numbers
  * ```
  */
 export function createFileStorage<T, K extends keyof T = keyof T>(
-  path: string,
   keyField: K,
-  adapter: FileAdapter = jsonFileAdapter,
+  options: FileStorageOptions<T, K>,
 ): Storage<T, K> {
+  const { path, adapter = jsonFileAdapter, keyFromStorage = (raw: string) => raw as T[K] } = options;
+
   // Create directory if no found
   if (!existsSync(path)) {
     mkdirSync(path, {
@@ -98,6 +137,21 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
   }
 
   const filePath = (key: T[K]) => join(path, adapter.fileName(key));
+
+  // Helper function to create a regex pattern that matches only files for this adapter
+  const createFilePattern = (): RegExp => {
+    // Call fileName with a placeholder to extract the key position
+    const wildcardPattern = adapter.fileName("___KEY___" as any);
+
+    // Escape special regex characters in the pattern
+    const escapedPattern = wildcardPattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+
+    // Replace our placeholder with a capture group
+    const regexPattern = `^${escapedPattern.replace("___KEY___", "(.*)")}$`;
+    return new RegExp(regexPattern);
+  };
+
+  const filePattern = createFilePattern();
 
   return {
     /**
@@ -151,20 +205,27 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
     async getAll(): Promise<T[]> {
       const files = await readdir(path);
 
-      return (await Promise.all(files.map((file) => readFile(join(path, file), adapter.encoding)))).map((data) =>
-        adapter.deserialize(data),
+      // Filter files to only those matching the adapter's pattern
+      const matchingFiles = files.filter((file) => filePattern.test(file));
+
+      return (await Promise.all(matchingFiles.map((file) => readFile(join(path, file), adapter.encoding)))).map(
+        (data) => adapter.deserialize(data),
       ) as T[];
     },
 
     /**
      * Stream all entries by reading all files in the directoy with an asynchronous iterator.
+     * Only streams files that match the adapter's fileName pattern.
      *
      * @returns {AsyncIterableIterator<T>} Asynchronous iterator with the entries
      */
     async *streamAll(): AsyncIterableIterator<T> {
       const files = await readdir(path);
 
-      for (const file of files) {
+      // Filter files to only those matching the adapter's pattern
+      const matchingFiles = files.filter((file) => filePattern.test(file));
+
+      for (const file of matchingFiles) {
         yield adapter.deserialize(await readFile(join(path, file), adapter.encoding));
       }
     },
@@ -192,7 +253,8 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
       for (const file of files) {
         const match = file.match(keyRegex);
         if (match?.[1]) {
-          keys.push(match[1] as T[K]);
+          // Apply coercion if provided
+          keys.push(keyFromStorage(match[1]));
         }
       }
       return keys;
