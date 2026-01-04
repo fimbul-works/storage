@@ -18,7 +18,7 @@ describe("createRedisStorage", () => {
     // Clean up any existing data before each test by flushing the database
     // This is the safest way to ensure a clean slate
     const { createClient } = await import("redis");
-    const client = await createClient({ url: "redis://127.0.0.1:6379" }).connect();
+    const client = await createClient().connect();
 
     try {
       await client.flushDb();
@@ -33,7 +33,7 @@ describe("createRedisStorage", () => {
       try {
         // Flush the database to clean up all keys
         const { createClient } = await import("redis");
-        const client = await createClient({ url: "redis://127.0.0.1:6379" }).connect();
+        const client = await createClient().connect();
 
         try {
           await client.flushDb();
@@ -103,9 +103,8 @@ describe("createRedisStorage", () => {
   });
 
   describe("get", () => {
-    it("should throw NotFoundError for non-existent key", async () => {
-      await expect(storage.get("non-existent")).rejects.toThrow(NotFoundError);
-      await expect(storage.get("non-existent")).rejects.toThrow('Key "non-existent" not found');
+    it("should return null for non-existent key", async () => {
+      expect(await storage.get("non-existent")).toBe(null);
     });
 
     it("should return the entry for existing key", async () => {
@@ -219,7 +218,7 @@ describe("createRedisStorage", () => {
       await storage.delete("1");
 
       expect(await storage.exists("1")).toBe(false);
-      await expect(storage.get("1")).rejects.toThrow(NotFoundError);
+      expect(await storage.get("1")).toBe(null);
     });
 
     it("should throw NotFoundError when deleting non-existent entry", async () => {
