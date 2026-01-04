@@ -7,6 +7,7 @@ A type-safe, abstract storage system for TypeScript with a unified interface for
 - 🔷 **Type-safe** — Full TypeScript support with generics
 - 🗄️ **Multiple Backends** — In-memory, file-based, Redis, and layered storage
 - 🔌 **Custom Serialization** — Pluggable adapters for different data formats
+- 📊 **Efficient Data Access** — Stream large datasets or retrieve all keys without loading entries
 - ⚠️ **Error Handling** — Specific error types for duplicate keys and missing entries
 
 ## Installation
@@ -37,7 +38,15 @@ const storage = createMemoryStorage<User, 'id'>('id');
 await storage.create({ id: '1', name: 'John Doe', email: 'john@example.com' });
 const user = await storage.get('1');
 await storage.update({ id: '1', name: 'John Updated', email: 'john@example.com' });
+
+// For small datasets
 const allUsers = await storage.getAll();
+
+// For large datasets, use streaming
+for await (const user of storage.streamAll()) {
+  console.log(user.name);
+}
+
 await storage.delete('1');
 ```
 
@@ -116,7 +125,7 @@ All storage implementations implement the `Storage<T, K>` interface:
 | `get(key)` | Retrieve entry by key | `Promise<T \| null>` |
 | `getAll()` | Retrieve all entries | `Promise<T[]>` |
 | `getKeys()` | Retrieve all keys | `Promise<T[K][]>` |
-| `streamAll()` | Stream all entries asynchronously | `AsyncIterableIterator<T>` |
+| `streamAll()` | Stream all entries | `AsyncIterableIterator<T>` |
 | `update(entry)` | Update existing entry | `Promise<void>` |
 | `delete(key)` | Delete entry | `Promise<void>` |
 
@@ -126,37 +135,6 @@ All storage implementations implement the `Storage<T, K>` interface:
 - **KeyNotFoundError**: Thrown when updating/deleting a non-existent entry
 
 ## Advanced Usage
-
-### Custom Serialization
-
-```typescript
-import { createFileStorage, type FileAdapter } from '@fimbul-works/storage';
-
-const csvAdapter: FileAdapter<User, 'id'> = {
-  encoding: 'utf-8',
-  fileName: (key) => `user_${key}.csv`,
-  serialize: (user) => `${user.id},${user.name},${user.email}`,
-  deserialize: (str) => {
-    const [id, name, email] = str.split(',');
-    return { id, name, email };
-  },
-};
-
-const storage = createFileStorage('id', { path: './data/users', adapter: csvAdapter });
-```
-
-### Different Key Fields
-
-```typescript
-interface Product {
-  sku: string;
-  name: string;
-  price: number;
-}
-
-const storage = createMemoryStorage<Product, 'sku'>('sku');
-await storage.create({ sku: 'ABC123', name: 'Widget', price: 9.99 });
-```
 
 ### Streaming Large Datasets
 
@@ -220,6 +198,41 @@ const redisStorage = await createRedisStorage<User, 'id'>('id', {
 await redisStorage.create({ id: 456, name: 'Jane' });
 const redisKeys = await redisStorage.getKeys();  // Returns [456] as number[]
 redisStorage.close();
+```
+
+### Custom Serialization
+
+Create custom serialization adapters for different data formats:
+
+```typescript
+import { createFileStorage, type FileAdapter } from '@fimbul-works/storage';
+
+const csvAdapter: FileAdapter<User, 'id'> = {
+  encoding: 'utf-8',
+  fileName: (key) => `user_${key}.csv`,
+  serialize: (user) => `${user.id},${user.name},${user.email}`,
+  deserialize: (str) => {
+    const [id, name, email] = str.split(',');
+    return { id, name, email };
+  },
+};
+
+const storage = createFileStorage('id', { path: './data/users', adapter: csvAdapter });
+```
+
+### Different Key Fields
+
+Use any field as the unique key:
+
+```typescript
+interface Product {
+  sku: string;
+  name: string;
+  price: number;
+}
+
+const storage = createMemoryStorage<Product, 'sku'>('sku');
+await storage.create({ sku: 'ABC123', name: 'Widget', price: 9.99 });
 ```
 
 ## License
