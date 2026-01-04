@@ -1,4 +1,4 @@
-import { DuplicateKeyError, NotFoundError, type Storage } from "./types.js";
+import { DuplicateKeyError, KeyNotFoundError, type Storage } from "./types.js";
 
 /**
  * Creates an in-memory storage implementation using a Map.
@@ -74,11 +74,11 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(keyField: K)
      *
      * @param {T} entry - The entry with updated values
      * @returns {Promise<void>} Promise that resolves when the entry is updated
-     * @throws {NotFoundError} If the entry's key does not exist
+     * @throws {KeyNotFoundError} If the entry's key does not exist
      */
     async update(entry: T): Promise<void> {
       if (!data.has(entry[keyField])) {
-        throw new NotFoundError(`Key "${entry[keyField]}" not found`);
+        throw new KeyNotFoundError(`Key "${entry[keyField]}" not found`);
       }
 
       data.set(entry[keyField], entry);
@@ -89,11 +89,11 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(keyField: K)
      *
      * @param {T[K]} key - The key of the entry to delete
      * @returns {Promise<void>} Promise that resolves when the entry is deleted
-     * @throws {NotFoundError} If the key does not exist
+     * @throws {KeyNotFoundError} If the key does not exist
      */
     async delete(key: T[K]): Promise<void> {
       if (!data.has(key)) {
-        throw new NotFoundError(`Key "${key}" not found`);
+        throw new KeyNotFoundError(`Key "${key}" not found`);
       }
 
       data.delete(key);

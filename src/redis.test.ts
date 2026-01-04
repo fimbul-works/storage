@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createRedisStorage } from "./redis";
-import { DuplicateKeyError, NotFoundError } from "./types";
+import { DuplicateKeyError, KeyNotFoundError } from "./types";
 
 interface TestUser {
   id: string;
@@ -189,7 +189,7 @@ describe("createRedisStorage", () => {
     it("should throw NotFoundError when updating non-existent entry", async () => {
       const user = { id: "1", name: "John", email: "john@example.com" };
 
-      await expect(storage.update(user)).rejects.toThrow(NotFoundError);
+      await expect(storage.update(user)).rejects.toThrow(KeyNotFoundError);
       await expect(storage.update(user)).rejects.toThrow('Key "1" not found');
     });
 
@@ -222,7 +222,7 @@ describe("createRedisStorage", () => {
     });
 
     it("should throw NotFoundError when deleting non-existent entry", async () => {
-      await expect(storage.delete("non-existent")).rejects.toThrow(NotFoundError);
+      await expect(storage.delete("non-existent")).rejects.toThrow(KeyNotFoundError);
       await expect(storage.delete("non-existent")).rejects.toThrow('Key "non-existent" not found');
     });
 

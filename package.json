@@ -1,7 +1,7 @@
 {
   "name": "@fimbul-works/storage",
-  "description": "Abstract storage system",
-  "version": "0.1.0",
+  "description": "Type-safe storage abstraction for TypeScript with unified CRUD interface",
+  "version": "1.0.0",
   "type": "module",
   "private": false,
   "license": "MIT",
@@ -14,7 +14,23 @@
   "bugs": {
     "url": "https://github.com/fimbul-works/storage/issues"
   },
-  "keywords": ["typescript"],
+  "keywords": [
+    "storage",
+    "typescript",
+    "type-safe",
+    "crud",
+    "abstraction",
+    "repository",
+    "cache",
+    "redis",
+    "file-storage",
+    "in-memory",
+    "layered-storage",
+    "persistence",
+    "key-value",
+    "data-access",
+    "generic"
+  ],
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",

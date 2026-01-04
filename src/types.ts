@@ -90,7 +90,7 @@ export interface Storage<T = any, K extends keyof T = keyof T> {
    *
    * @param {T} entry - The entry with updated values
    * @returns {Promise<void>} Promise that resolves when the entry is updated
-   * @throws {NotFoundError} If the entry's key does not exist
+   * @throws {KeyNotFoundError} If the entry's key does not exist
    *
    * @example
    * ```typescript
@@ -110,7 +110,7 @@ export interface Storage<T = any, K extends keyof T = keyof T> {
    *
    * @param {T[K]} key - The key of the entry to delete
    * @returns {Promise<void>} Promise that resolves when the entry is deleted
-   * @throws {NotFoundError} If the key does not exist in storage
+   * @throws {KeyNotFoundError} If the key does not exist in storage
    *
    * @example
    * ```typescript
@@ -205,14 +205,14 @@ export class DuplicateKeyError extends Error {
  * }
  * ```
  */
-export class NotFoundError extends Error {
+export class KeyNotFoundError extends Error {
   /**
-   * Creates a new NotFoundError.
+   * Creates a new KeyNotFoundError.
    *
    * @param message - Error message describing the missing key
    */
   constructor(message?: string) {
     super(message);
-    this.name = "NotFoundError";
+    this.name = "KeyNotFoundError";
   }
 }

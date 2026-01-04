@@ -2,7 +2,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { jsonSerializationAdapter } from "./serialization.js";
-import { DuplicateKeyError, NotFoundError, type SerializationAdapter, type Storage } from "./types.js";
+import { DuplicateKeyError, KeyNotFoundError, type SerializationAdapter, type Storage } from "./types.js";
 
 /**
  * Adapter interface for file-based storage with custom serialization and file naming.
@@ -161,13 +161,13 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
      *
      * @param {T} entry - The entry with updated values
      * @returns {Promise<void>} Promise that resolves when the entry is updated
-     * @throws {NotFoundError} If the entry's key does not exist
+     * @throws {KeyNotFoundError} If the entry's key does not exist
      */
     async update(entry: T): Promise<void> {
       const fileName = filePath(entry[keyField]);
 
       if (!existsSync(fileName)) {
-        throw new NotFoundError(`Key "${entry[keyField]}" not found`);
+        throw new KeyNotFoundError(`Key "${entry[keyField]}" not found`);
       }
 
       await writeFile(fileName, adapter.serialize(entry));
@@ -178,13 +178,13 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
      *
      * @param {T[K]} key - The key of the entry to delete
      * @returns {Promise<void>} Promise that resolves when the entry is deleted
-     * @throws {NotFoundError} If the key does not exist
+     * @throws {KeyNotFoundError} If the key does not exist
      */
     async delete(key: T[K]): Promise<void> {
       const fileName = filePath(key);
 
       if (!existsSync(fileName)) {
-        throw new NotFoundError(`Key "${key}" not found`);
+        throw new KeyNotFoundError(`Key "${key}" not found`);
       }
 
       await rm(fileName);

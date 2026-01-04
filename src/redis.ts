@@ -1,6 +1,6 @@
 import { type RedisArgument, createClient } from "redis";
 import { jsonSerializationAdapter } from "./serialization.js";
-import { DuplicateKeyError, NotFoundError, type SerializationAdapter, type Storage } from "./types.js";
+import { DuplicateKeyError, KeyNotFoundError, type SerializationAdapter, type Storage } from "./types.js";
 
 /**
  * Redis storage interface that extends Storage with connection management.
@@ -16,6 +16,11 @@ import { DuplicateKeyError, NotFoundError, type SerializationAdapter, type Stora
  * ```
  */
 export interface RedisStorage<T, K extends keyof T> extends Storage<T, K> {
+  /**
+   * Redis client.
+   */
+  client: ReturnType<typeof createClient>;
+
   /**
    * Closes the Redis connection.
    *
@@ -190,13 +195,13 @@ export async function createRedisStorage<T, K extends keyof T>(
      *
      * @param {T} entry - The entry with updated values
      * @returns {Promise<void>} Promise that resolves when the entry is updated
-     * @throws {NotFoundError} If the entry's key does not exist
+     * @throws {KeyNotFoundError} If the entry's key does not exist
      */
     async update(entry: T): Promise<void> {
       const redisKey = makeKey(entry[keyField]);
 
       if (!(await client.exists(redisKey))) {
-        throw new NotFoundError(`Key "${entry[keyField]}" not found`);
+        throw new KeyNotFoundError(`Key "${entry[keyField]}" not found`);
       }
 
       await client.set(redisKey, serializationAdapter.serialize(entry));
@@ -207,17 +212,22 @@ export async function createRedisStorage<T, K extends keyof T>(
      *
      * @param {T[K]} key - The key of the entry to delete
      * @returns {Promise<void>} Promise that resolves when the entry is deleted
-     * @throws {NotFoundError} If the key does not exist
+     * @throws {KeyNotFoundError} If the key does not exist
      */
     async delete(key: T[K]): Promise<void> {
       const redisKey = makeKey(key);
 
       if (!(await client.exists(redisKey))) {
-        throw new NotFoundError(`Key "${key}" not found`);
+        throw new KeyNotFoundError(`Key "${key}" not found`);
       }
 
       await client.del(redisKey);
     },
+
+    /**
+     * Redis client.
+     */
+    client,
 
     /**
      * Closes the Redis connection.

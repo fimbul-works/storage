@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import { createFileStorage, jsonFileAdapter, type FileAdapter } from "./file";
-import { DuplicateKeyError, NotFoundError } from "./types";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { type FileAdapter, createFileStorage, jsonFileAdapter } from "./file";
+import { DuplicateKeyError, KeyNotFoundError } from "./types";
 
 interface TestUser {
   id: string;
@@ -148,7 +148,7 @@ describe("createFileStorage", () => {
     it("should throw NotFoundError when updating non-existent entry", async () => {
       const user = { id: "1", name: "John", email: "john@example.com" };
 
-      await expect(storage.update(user)).rejects.toThrow(NotFoundError);
+      await expect(storage.update(user)).rejects.toThrow(KeyNotFoundError);
       await expect(storage.update(user)).rejects.toThrow('Key "1" not found');
     });
 
@@ -179,7 +179,7 @@ describe("createFileStorage", () => {
     });
 
     it("should throw NotFoundError when deleting non-existent entry", async () => {
-      await expect(storage.delete("non-existent")).rejects.toThrow(NotFoundError);
+      await expect(storage.delete("non-existent")).rejects.toThrow(KeyNotFoundError);
       await expect(storage.delete("non-existent")).rejects.toThrow('Key "non-existent" not found');
     });
 
