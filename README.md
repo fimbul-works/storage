@@ -116,6 +116,7 @@ All storage implementations implement the `Storage<T, K>` interface:
 | `create(entry)` | Create new entry | `Promise<void>` |
 | `get(key)` | Retrieve entry by key | `Promise<T \| null>` |
 | `getAll()` | Retrieve all entries | `Promise<T[]>` |
+| `getKeys()` | Retrieve all keys | `Promise<T[K][]>` |
 | `streamAll()` | Stream all entries asynchronously | `AsyncIterableIterator<T>` |
 | `update(entry)` | Update existing entry | `Promise<void>` |
 | `delete(key)` | Delete entry | `Promise<void>` |
@@ -180,23 +181,16 @@ for await (const user of storage.streamAll()) {
 }
 ```
 
-### Type-safe Repository Pattern
+### Working with Keys
+
+Sometimes you only need the keys without loading the full entries:
 
 ```typescript
-class UserRepository {
-  constructor(private storage: Storage<User, 'id'>) {}
+const storage = createFileStorage<User, 'id'>('./data/users', 'id');
 
-  async findByEmail(email: string): Promise<User | null> {
-    const users = await this.storage.getAll();
-    return users.find(u => u.email === email) || null;
-  }
-
-  async create(user: User): Promise<void> {
-    return this.storage.create(user);
-  }
-}
-
-const repo = new UserRepository(createMemoryStorage<User, 'id'>('id'));
+// Get all user IDs
+const userIds = await storage.getKeys();
+console.log(`Found ${userIds.length} users`);
 ```
 
 ## License

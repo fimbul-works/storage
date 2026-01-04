@@ -174,6 +174,104 @@ describe("createRedisStorage", () => {
     });
   });
 
+  describe("getKeys", () => {
+    it("should return empty array when no entries exist", async () => {
+      const keys = await storage.getKeys();
+      expect(keys).toEqual([]);
+    });
+
+    it("should return all keys", async () => {
+      const user1 = { id: "1", name: "John", email: "john@example.com" };
+      const user2 = { id: "2", name: "Jane", email: "jane@example.com" };
+      const user3 = { id: "3", name: "Bob", email: "bob@example.com" };
+
+      await storage.create(user1);
+      await storage.create(user2);
+      await storage.create(user3);
+
+      const keys = await storage.getKeys();
+      expect(keys).toHaveLength(3);
+      expect(keys).toContain("1");
+      expect(keys).toContain("2");
+      expect(keys).toContain("3");
+    });
+
+    it("should return keys matching the entries from getAll", async () => {
+      const users = [
+        { id: "1", name: "John", email: "john@example.com" },
+        { id: "2", name: "Jane", email: "jane@example.com" },
+        { id: "3", name: "Bob", email: "bob@example.com" },
+      ];
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      const allEntries = await storage.getAll();
+      const allKeys = await storage.getKeys();
+
+      expect(allKeys).toHaveLength(allEntries.length);
+      expect(allKeys.sort()).toEqual(allEntries.map((u) => u.id).sort());
+    });
+
+    it("should handle large numbers of keys", async () => {
+      const users = Array.from({ length: 100 }, (_, i) => ({
+        id: `user-${i}`,
+        name: `User ${i}`,
+        email: `user${i}@example.com`,
+      }));
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      const keys = await storage.getKeys();
+      expect(keys).toHaveLength(100);
+    });
+
+    it("should only return keys with the correct key prefix", async () => {
+      // Create entries with default prefix
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+      await storage.create({ id: "2", name: "Jane", email: "jane@example.com" });
+
+      // Create a storage instance with a different prefix
+      const storage2 = await createRedisStorage<TestUser, "id">("id", {
+        keyPrefix: "different:",
+      });
+
+      await storage2.create({ id: "3", name: "Bob", email: "bob@example.com" });
+      await storage2.create({ id: "4", name: "Alice", email: "alice@example.com" });
+
+      // First storage should only see its own keys
+      const keys1 = await storage.getKeys();
+      expect(keys1).toHaveLength(2);
+      expect(keys1).toContain("1");
+      expect(keys1).toContain("2");
+
+      // Second storage should only see its own keys
+      const keys2 = await storage2.getKeys();
+      expect(keys2).toHaveLength(2);
+      expect(keys2).toContain("3");
+      expect(keys2).toContain("4");
+
+      storage2.close();
+    });
+
+    it("should persist keys across storage instances", async () => {
+      const user = { id: "1", name: "John", email: "john@example.com" };
+      await storage.create(user);
+
+      // Create a new storage instance with the same configuration
+      const newStorage = await createRedisStorage<TestUser, "id">("id");
+      const keys = await newStorage.getKeys();
+
+      expect(keys).toHaveLength(1);
+      expect(keys[0]).toBe("1");
+
+      newStorage.close();
+    });
+  });
+
   describe("streamAll", () => {
     it("should return empty iterator when no entries exist", async () => {
       const results: TestUser[] = [];

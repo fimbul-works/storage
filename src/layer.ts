@@ -116,6 +116,37 @@ export function createLayeredStorage<T, K extends keyof T>(keyField: K, layers: 
     },
 
     /**
+     * Streams all entries from all layers using a snapshot of keys.
+     * Uses getKeys() to capture a consistent snapshot, then streams entries
+     * by checking layers top-down for each key.
+     *
+     * @returns {AsyncIterableIterator<T>} Asynchronous iterator with the entries
+     */
+    async *streamAll(): AsyncIterableIterator<T> {
+      // Get all unique keys from all layers (snapshot in time)
+      const allKeys = await this.getKeys();
+
+      // For each key, fetch the entry from layers top-down
+      for (const key of allKeys) {
+        const entry = await this.get(key);
+        if (entry !== null) {
+          yield entry;
+        }
+      }
+    },
+
+    /**
+     * Retrieves all unique keys from all layers.
+     * Returns a merged list of keys with duplicates removed (since the same key
+     * may exist in multiple layers).
+     *
+     * @returns {Promise<T[K][]>} Promise that resolves to an array of all unique keys
+     */
+    async getKeys(): Promise<T[K][]> {
+      return Array.from(new Set((await Promise.all(layers.map((layer) => layer.getKeys()))).flat()));
+    },
+
+    /**
      * Updates an existing entry in all layers.
      * If the entry exists in a layer, it updates; if not, it creates (upsert).
      * Throws if the key doesn't exist in any layer.

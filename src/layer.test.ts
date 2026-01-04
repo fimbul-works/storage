@@ -200,4 +200,150 @@ describe("LayeredStorage", () => {
     expect(await storage.get("1")).toEqual({ id: "1", name: "John", email: "john@example.com" });
     expect(await storage.getAll()).toHaveLength(1);
   });
+
+  describe("getKeys", () => {
+    it("should return empty array when no entries exist in any layer", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      const keys = await storage.getKeys();
+      expect(keys).toEqual([]);
+    });
+
+    it("should return unique keys from all layers", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      await memory1.create({ id: "1", name: "John", email: "john@example.com" });
+      await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
+      await memory2.create({ id: "3", name: "Bob", email: "bob@example.com" });
+
+      const keys = await storage.getKeys();
+      expect(keys).toHaveLength(3);
+      expect(keys).toContain("1");
+      expect(keys).toContain("2");
+      expect(keys).toContain("3");
+    });
+
+    it("should deduplicate keys that exist in multiple layers", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      await memory1.create({ id: "1", name: "Top", email: "top@example.com" });
+      await memory2.create({ id: "1", name: "Bottom", email: "bottom@example.com" });
+      await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
+
+      const keys = await storage.getKeys();
+      expect(keys).toHaveLength(2);
+      expect(keys).toContain("1");
+      expect(keys).toContain("2");
+    });
+
+    it("should return keys matching getAll", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      await memory1.create({ id: "1", name: "Top", email: "top@example.com" });
+      await memory2.create({ id: "2", name: "Bottom", email: "bottom@example.com" });
+      await memory2.create({ id: "3", name: "Bottom2", email: "bottom2@example.com" });
+
+      const allEntries = await storage.getAll();
+      const allKeys = await storage.getKeys();
+
+      expect(allKeys).toHaveLength(allEntries.length);
+      expect(allKeys.sort()).toEqual(allEntries.map((u) => u.id).sort());
+    });
+  });
+
+  describe("streamAll", () => {
+    it("should return empty iterator when no entries exist", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      const results: User[] = [];
+      for await (const entry of storage.streamAll()) {
+        results.push(entry);
+      }
+
+      expect(results).toEqual([]);
+    });
+
+    it("should stream all entries from all layers", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      await memory1.create({ id: "1", name: "John", email: "john@example.com" });
+      await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
+      await memory2.create({ id: "3", name: "Bob", email: "bob@example.com" });
+
+      const results: User[] = [];
+      for await (const entry of storage.streamAll()) {
+        results.push(entry);
+      }
+
+      expect(results).toHaveLength(3);
+      expect(results).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "1", name: "John" }),
+          expect.objectContaining({ id: "2", name: "Jane" }),
+          expect.objectContaining({ id: "3", name: "Bob" }),
+        ]),
+      );
+    });
+
+    it("should prioritize entries from top layers", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      await memory1.create({ id: "1", name: "Top", email: "top@example.com" });
+      await memory2.create({ id: "1", name: "Bottom", email: "bottom@example.com" });
+      await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
+
+      const results: User[] = [];
+      for await (const entry of storage.streamAll()) {
+        results.push(entry);
+      }
+
+      expect(results).toHaveLength(2);
+      expect(results).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: "1", name: "Top" }), // From top layer
+          expect.objectContaining({ id: "2", name: "Jane" }),
+        ]),
+      );
+    });
+
+    it("should return the same data as getAll but streamed", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      await memory1.create({ id: "1", name: "John", email: "john@example.com" });
+      await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
+      await memory2.create({ id: "3", name: "Bob", email: "bob@example.com" });
+
+      const allResults = await storage.getAll();
+      const streamResults: User[] = [];
+      for await (const entry of storage.streamAll()) {
+        streamResults.push(entry);
+      }
+
+      expect(streamResults).toHaveLength(allResults.length);
+      expect(streamResults).toEqual(expect.arrayContaining(allResults));
+      expect(allResults).toEqual(expect.arrayContaining(streamResults));
+    });
+
+    it("should allow early termination", async () => {
+      const storage = createLayeredStorage<User, "id">("id", [memory1, memory2]);
+
+      await memory1.create({ id: "1", name: "John", email: "john@example.com" });
+      await memory2.create({ id: "2", name: "Jane", email: "jane@example.com" });
+      await memory2.create({ id: "3", name: "Bob", email: "bob@example.com" });
+      await memory1.create({ id: "4", name: "Alice", email: "alice@example.com" });
+      await memory2.create({ id: "5", name: "Charlie", email: "charlie@example.com" });
+
+      let count = 0;
+      const maxItems = 3;
+      for await (const entry of storage.streamAll()) {
+        count++;
+        expect(entry).toBeDefined();
+        if (count >= maxItems) {
+          break; // Early termination
+        }
+      }
+
+      expect(count).toBe(maxItems);
+    });
+  });
 });

@@ -214,6 +214,34 @@ export async function createRedisStorage<T, K extends keyof T>(
     },
 
     /**
+     * Retrieves all keys from Redis using SCAN for efficient iteration.
+     * Only returns keys matching the configured key prefix, with the prefix removed.
+     *
+     * @returns {Promise<T[K][]>} Promise that resolves to an array of all keys
+     */
+    async getKeys(): Promise<T[K][]> {
+      const keys: T[K][] = [];
+      const prefixLength = keyPrefix.length;
+
+      for await (const keyBatch of client.scanIterator({
+        TYPE: "STRING",
+        MATCH: `${keyPrefix}*`,
+      })) {
+        if (!Array.isArray(keyBatch) || keyBatch.length === 0) {
+          continue;
+        }
+
+        // Remove the key prefix from each key
+        for (const key of keyBatch) {
+          const strippedKey = key.substring(prefixLength) as T[K];
+          keys.push(strippedKey);
+        }
+      }
+
+      return keys;
+    },
+
+    /**
      * Updates an existing entry in Redis.
      *
      * @param {T} entry - The entry with updated values

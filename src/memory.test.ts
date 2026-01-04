@@ -114,6 +114,72 @@ describe("createMemoryStorage", () => {
     });
   });
 
+  describe("getKeys", () => {
+    it("should return empty array when no entries exist", async () => {
+      const keys = await storage.getKeys();
+      expect(keys).toEqual([]);
+    });
+
+    it("should return all keys", async () => {
+      const user1 = { id: "1", name: "John", email: "john@example.com" };
+      const user2 = { id: "2", name: "Jane", email: "jane@example.com" };
+      const user3 = { id: "3", name: "Bob", email: "bob@example.com" };
+
+      await storage.create(user1);
+      await storage.create(user2);
+      await storage.create(user3);
+
+      const keys = await storage.getKeys();
+      expect(keys).toHaveLength(3);
+      expect(keys).toContain("1");
+      expect(keys).toContain("2");
+      expect(keys).toContain("3");
+    });
+
+    it("should return keys as an array", async () => {
+      const user1 = { id: "1", name: "John", email: "john@example.com" };
+      await storage.create(user1);
+
+      const keys = await storage.getKeys();
+      expect(Array.isArray(keys)).toBe(true);
+      expect(keys).toHaveLength(1);
+      expect(keys[0]).toBe("1");
+    });
+
+    it("should return keys matching the entries from getAll", async () => {
+      const users = [
+        { id: "1", name: "John", email: "john@example.com" },
+        { id: "2", name: "Jane", email: "jane@example.com" },
+        { id: "3", name: "Bob", email: "bob@example.com" },
+      ];
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      const allEntries = await storage.getAll();
+      const allKeys = await storage.getKeys();
+
+      expect(allKeys).toHaveLength(allEntries.length);
+      expect(allKeys.sort()).toEqual(allEntries.map((u) => u.id).sort());
+    });
+
+    it("should handle large numbers of keys", async () => {
+      const users = Array.from({ length: 1000 }, (_, i) => ({
+        id: `user-${i}`,
+        name: `User ${i}`,
+        email: `user${i}@example.com`,
+      }));
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      const keys = await storage.getKeys();
+      expect(keys).toHaveLength(1000);
+    });
+  });
+
   describe("streamAll", () => {
     it("should return empty iterator when no entries exist", async () => {
       const results: TestUser[] = [];

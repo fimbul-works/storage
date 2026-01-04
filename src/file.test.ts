@@ -133,6 +133,74 @@ describe("createFileStorage", () => {
     });
   });
 
+  describe("getKeys", () => {
+    it("should return empty array when no entries exist", async () => {
+      const keys = await storage.getKeys();
+      expect(keys).toEqual([]);
+    });
+
+    it("should return all keys", async () => {
+      const user1 = { id: "1", name: "John", email: "john@example.com" };
+      const user2 = { id: "2", name: "Jane", email: "jane@example.com" };
+      const user3 = { id: "3", name: "Bob", email: "bob@example.com" };
+
+      await storage.create(user1);
+      await storage.create(user2);
+      await storage.create(user3);
+
+      const keys = await storage.getKeys();
+      expect(keys).toHaveLength(3);
+      expect(keys).toContain("1");
+      expect(keys).toContain("2");
+      expect(keys).toContain("3");
+    });
+
+    it("should return keys matching the entries from getAll", async () => {
+      const users = [
+        { id: "1", name: "John", email: "john@example.com" },
+        { id: "2", name: "Jane", email: "jane@example.com" },
+        { id: "3", name: "Bob", email: "bob@example.com" },
+      ];
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      const allEntries = await storage.getAll();
+      const allKeys = await storage.getKeys();
+
+      expect(allKeys).toHaveLength(allEntries.length);
+      expect(allKeys.sort()).toEqual(allEntries.map((u) => u.id).sort());
+    });
+
+    it("should handle large numbers of keys", async () => {
+      const users = Array.from({ length: 100 }, (_, i) => ({
+        id: `user-${i}`,
+        name: `User ${i}`,
+        email: `user${i}@example.com`,
+      }));
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      const keys = await storage.getKeys();
+      expect(keys).toHaveLength(100);
+    });
+
+    it("should persist keys across storage instances", async () => {
+      const user = { id: "1", name: "John", email: "john@example.com" };
+      await storage.create(user);
+
+      // Create a new storage instance with the same directory
+      const newStorage = createFileStorage<TestUser, "id">(testDir, "id");
+      const keys = await newStorage.getKeys();
+
+      expect(keys).toHaveLength(1);
+      expect(keys[0]).toBe("1");
+    });
+  });
+
   describe("streamAll", () => {
     it("should return empty iterator when no entries exist", async () => {
       const results: TestUser[] = [];
@@ -441,6 +509,73 @@ describe("createFileStorage", () => {
 
       const retrieved = await productStorage.get("abc123");
       expect(retrieved).toEqual(product);
+    });
+
+    it("should extract keys correctly with custom fileName patterns", async () => {
+      interface Document {
+        docId: string;
+        title: string;
+      }
+
+      const documentAdapter: FileAdapter<Document, "docId"> = {
+        encoding: "utf-8",
+        fileName(key: string): string {
+          return `doc-${key}-v1.json`;
+        },
+        serialize(entry: Document): string {
+          return JSON.stringify(entry);
+        },
+        deserialize(str: string): Document {
+          return JSON.parse(str);
+        },
+      };
+
+      const docStorage = createFileStorage<Document, "docId">(testDir, "docId", documentAdapter);
+
+      const docs = [
+        { docId: "abc", title: "Doc A" },
+        { docId: "xyz", title: "Doc X" },
+      ];
+
+      for (const doc of docs) {
+        await docStorage.create(doc);
+      }
+
+      const keys = await docStorage.getKeys();
+      expect(keys).toHaveLength(2);
+      expect(keys).toContain("abc");
+      expect(keys).toContain("xyz");
+    });
+
+    it("should handle numeric keys with custom fileName patterns", async () => {
+      interface Item {
+        id: number;
+        name: string;
+      }
+
+      const itemAdapter: FileAdapter<Item, "id"> = {
+        encoding: "utf-8",
+        fileName(key: number): string {
+          return `item_${String(key).padStart(5, "0")}.dat`;
+        },
+        serialize(entry: Item): string {
+          return JSON.stringify(entry);
+        },
+        deserialize(str: string): Item {
+          return JSON.parse(str);
+        },
+      };
+
+      const itemStorage = createFileStorage<Item, "id">(testDir, "id", itemAdapter);
+
+      await itemStorage.create({ id: 1, name: "One" });
+      await itemStorage.create({ id: 42, name: "Forty-Two" });
+
+      const keys = await itemStorage.getKeys();
+      expect(keys).toHaveLength(2);
+      // Keys are extracted from filenames, which contain the padded version
+      expect(keys).toContain("00001");
+      expect(keys).toContain("00042");
     });
   });
 

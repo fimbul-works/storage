@@ -81,6 +81,15 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(keyField: K)
     },
 
     /**
+     * Retrieves all keys from the in-memory storage.
+     *
+     * @returns {Promise<T[K][]>} Promise that resolves to an array of all keys
+     */
+    async getKeys(): Promise<T[K][]> {
+      return Array.from(data.keys());
+    },
+
+    /**
      * Updates an existing entry in the in-memory storage.
      *
      * @param {T} entry - The entry with updated values

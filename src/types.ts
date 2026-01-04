@@ -99,6 +99,19 @@ export interface Storage<T = any, K extends keyof T = keyof T> {
   streamAll(): AsyncIterableIterator<T>;
 
   /**
+   * Retrieves all keys from storage.
+   *
+   * @returns {Promise<T[K][]>} Promise that resolves to an array of all keys
+   *
+   * @example
+   * ```typescript
+   * const allKeys = await storage.getKeys();
+   * console.log(`Found ${allKeys.length} keys`);
+   * ```
+   */
+  getKeys(): Promise<T[K][]>;
+
+  /**
    * Updates an existing entry in storage.
    *
    * @param {T} entry - The entry with updated values

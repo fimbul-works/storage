@@ -170,6 +170,35 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
     },
 
     /**
+     * Retrieves all keys by listing all files in the directory and extracting keys from filenames.
+     *
+     * @returns {Promise<T[K][]>} Promise that resolves to an array of all keys
+     */
+    async getKeys(): Promise<T[K][]> {
+      const files = await readdir(path);
+
+      // Create a regex pattern from the fileName function
+      // We call fileName with a placeholder to extract the key position
+      const wildcardPattern = adapter.fileName("___KEY___" as any);
+
+      // Escape special regex characters in the pattern
+      const escapedPattern = wildcardPattern.replace(/[.+?^${}()|[\]\\]/g, "\\$&");
+
+      // Replace our placeholder with a capture group
+      const regexPattern = `^${escapedPattern.replace("___KEY___", "(.*)")}$`;
+      const keyRegex = new RegExp(regexPattern);
+
+      const keys: T[K][] = [];
+      for (const file of files) {
+        const match = file.match(keyRegex);
+        if (match?.[1]) {
+          keys.push(match[1] as T[K]);
+        }
+      }
+      return keys;
+    },
+
+    /**
      * Updates an existing file for the entry.
      *
      * @param {T} entry - The entry with updated values
