@@ -1,0 +1,58 @@
+{
+  "name": "@fimbul-works/storage",
+  "description": "Abstract storage system",
+  "version": "0.1.0",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "author": "FimbulWorks <contact@fimbul.works>",
+  "homepage": "https://github.com/fimbul-works/storage#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fimbul-works/storage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fimbul-works/storage/issues"
+  },
+  "keywords": ["typescript"],
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./redis": {
+      "types": "./dist/esm/redis.d.ts",
+      "import": "./dist/esm/redis.js",
+      "require": "./dist/cjs/redis.js"
+    }
+  },
+  "files": ["dist", "README.md", "LICENSE"],
+  "sideEffects": false,
+  "scripts": {
+    "build": "rm -rf dist && pnpm build:esm && pnpm build:cjs",
+    "build:esm": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json",
+    "format": "npx biome format --write src",
+    "test": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^25.0.3",
+    "redis": "^5.10.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
+  },
+  "peerDependencies": {
+    "redis": ">=5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "redis": {
+      "optional": true
+    }
+  }
+}
