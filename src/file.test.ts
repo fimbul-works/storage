@@ -133,6 +133,183 @@ describe("createFileStorage", () => {
     });
   });
 
+  describe("streamAll", () => {
+    it("should return empty iterator when no entries exist", async () => {
+      const results: TestUser[] = [];
+      for await (const entry of storage.streamAll()) {
+        results.push(entry);
+      }
+
+      expect(results).toEqual([]);
+    });
+
+    it("should stream all entries", async () => {
+      const user1 = { id: "1", name: "John", email: "john@example.com" };
+      const user2 = { id: "2", name: "Jane", email: "jane@example.com" };
+      const user3 = { id: "3", name: "Bob", email: "bob@example.com" };
+
+      await storage.create(user1);
+      await storage.create(user2);
+      await storage.create(user3);
+
+      const results: TestUser[] = [];
+      for await (const entry of storage.streamAll()) {
+        results.push(entry);
+      }
+
+      expect(results).toHaveLength(3);
+      expect(results).toContainEqual(user1);
+      expect(results).toContainEqual(user2);
+      expect(results).toContainEqual(user3);
+    });
+
+    it("should stream entries one at a time", async () => {
+      const user1 = { id: "1", name: "John", email: "john@example.com" };
+      const user2 = { id: "2", name: "Jane", email: "jane@example.com" };
+
+      await storage.create(user1);
+      await storage.create(user2);
+
+      const stream = storage.streamAll();
+      const first = await stream.next();
+      expect(first.done).toBe(false);
+      expect(first.value).toBeDefined();
+
+      const second = await stream.next();
+      expect(second.done).toBe(false);
+      expect(second.value).toBeDefined();
+
+      const third = await stream.next();
+      expect(third.done).toBe(true);
+    });
+
+    it("should return the same data as getAll but streamed", async () => {
+      const users = [
+        { id: "1", name: "John", email: "john@example.com" },
+        { id: "2", name: "Jane", email: "jane@example.com" },
+        { id: "3", name: "Bob", email: "bob@example.com" },
+      ];
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      const allResults = await storage.getAll();
+      const streamResults: TestUser[] = [];
+      for await (const entry of storage.streamAll()) {
+        streamResults.push(entry);
+      }
+
+      expect(streamResults).toHaveLength(allResults.length);
+      expect(streamResults).toEqual(expect.arrayContaining(allResults));
+      expect(allResults).toEqual(expect.arrayContaining(streamResults));
+    });
+
+    it("should handle large datasets efficiently", async () => {
+      const users = Array.from({ length: 100 }, (_, i) => ({
+        id: `user-${i}`,
+        name: `User ${i}`,
+        email: `user${i}@example.com`,
+      }));
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      let count = 0;
+      for await (const entry of storage.streamAll()) {
+        count++;
+        expect(entry).toBeDefined();
+        expect(users).toContainEqual(entry);
+      }
+
+      expect(count).toBe(100);
+    });
+
+    it("should allow early termination of streaming", async () => {
+      const users = [
+        { id: "1", name: "John", email: "john@example.com" },
+        { id: "2", name: "Jane", email: "jane@example.com" },
+        { id: "3", name: "Bob", email: "bob@example.com" },
+        { id: "4", name: "Alice", email: "alice@example.com" },
+        { id: "5", name: "Charlie", email: "charlie@example.com" },
+      ];
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      let count = 0;
+      const maxItems = 3;
+      for await (const entry of storage.streamAll()) {
+        count++;
+        expect(entry).toBeDefined();
+        if (count >= maxItems) {
+          break; // Early termination
+        }
+      }
+
+      expect(count).toBe(maxItems);
+    });
+
+    it("should work with for...of loops", async () => {
+      const user1 = { id: "1", name: "John", email: "john@example.com" };
+      const user2 = { id: "2", name: "Jane", email: "jane@example.com" };
+
+      await storage.create(user1);
+      await storage.create(user2);
+
+      const results: TestUser[] = [];
+      for await (const user of storage.streamAll()) {
+        results.push(user);
+      }
+
+      expect(results).toHaveLength(2);
+    });
+
+    it("should allow processing entries during streaming", async () => {
+      const users = [
+        { id: "1", name: "John", email: "john@example.com" },
+        { id: "2", name: "Jane", email: "jane@example.com" },
+        { id: "3", name: "Bob", email: "bob@example.com" },
+      ];
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      const processedNames: string[] = [];
+      for await (const entry of storage.streamAll()) {
+        processedNames.push(entry.name.toUpperCase());
+      }
+
+      expect(processedNames).toEqual(["JOHN", "JANE", "BOB"]);
+    });
+
+    it("should persist data across storage instances", async () => {
+      const users = [
+        { id: "1", name: "John", email: "john@example.com" },
+        { id: "2", name: "Jane", email: "jane@example.com" },
+      ];
+
+      for (const user of users) {
+        await storage.create(user);
+      }
+
+      // Create a new storage instance with the same directory
+      const newStorage = createFileStorage<TestUser, "id">(testDir, "id");
+
+      const results: TestUser[] = [];
+      for await (const entry of newStorage.streamAll()) {
+        results.push(entry);
+      }
+
+      expect(results).toHaveLength(2);
+      expect(results).toContainEqual(users[0]);
+      expect(results).toContainEqual(users[1]);
+    });
+  });
+
   describe("update", () => {
     it("should update an existing entry", async () => {
       const user = { id: "1", name: "John", email: "john@example.com" };

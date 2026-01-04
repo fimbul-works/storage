@@ -116,6 +116,7 @@ All storage implementations implement the `Storage<T, K>` interface:
 | `create(entry)` | Create new entry | `Promise<void>` |
 | `get(key)` | Retrieve entry by key | `Promise<T \| null>` |
 | `getAll()` | Retrieve all entries | `Promise<T[]>` |
+| `streamAll()` | Stream all entries asynchronously | `AsyncIterableIterator<T>` |
 | `update(entry)` | Update existing entry | `Promise<void>` |
 | `delete(key)` | Delete entry | `Promise<void>` |
 
@@ -155,6 +156,28 @@ interface Product {
 
 const storage = createMemoryStorage<Product, 'sku'>('sku');
 await storage.create({ sku: 'ABC123', name: 'Widget', price: 9.99 });
+```
+
+### Streaming Large Datasets
+
+For large datasets, use `streamAll()` to process entries efficiently without loading everything into memory:
+
+```typescript
+const storage = createFileStorage<User, 'id'>('./data/users', 'id');
+
+// Process users one at a time
+for await (const user of storage.streamAll()) {
+  console.log(`Processing: ${user.name}`);
+  // Send to API, perform calculations, etc.
+}
+
+// Early termination - stop after finding what you need
+for await (const user of storage.streamAll()) {
+  if (user.email === 'target@example.com') {
+    console.log('Found target user!');
+    break; // Stops iteration, saves resources
+  }
+}
 ```
 
 ### Type-safe Repository Pattern

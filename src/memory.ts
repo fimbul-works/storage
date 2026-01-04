@@ -70,6 +70,17 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(keyField: K)
     },
 
     /**
+     * Stream all entries with an asynchronous iterator.
+     *
+     * @returns {AsyncIterableIterator<T>} Asynchronous iterator with the entries
+     */
+    async *streamAll(): AsyncIterableIterator<T> {
+      for (const entry of data.values()) {
+        yield entry;
+      }
+    },
+
+    /**
      * Updates an existing entry in the in-memory storage.
      *
      * @param {T} entry - The entry with updated values

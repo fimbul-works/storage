@@ -151,9 +151,22 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
     async getAll(): Promise<T[]> {
       const files = await readdir(path);
 
-      return (await Promise.all(files.map((file) => readFile(join(path, file), "utf-8")))).map((data) =>
+      return (await Promise.all(files.map((file) => readFile(join(path, file), adapter.encoding)))).map((data) =>
         adapter.deserialize(data),
       ) as T[];
+    },
+
+    /**
+     * Stream all entries by reading all files in the directoy with an asynchronous iterator.
+     *
+     * @returns {AsyncIterableIterator<T>} Asynchronous iterator with the entries
+     */
+    async *streamAll(): AsyncIterableIterator<T> {
+      const files = await readdir(path);
+
+      for (const file of files) {
+        yield adapter.deserialize(await readFile(join(path, file), adapter.encoding));
+      }
     },
 
     /**

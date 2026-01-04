@@ -191,6 +191,29 @@ export async function createRedisStorage<T, K extends keyof T>(
     },
 
     /**
+     * Stream all entries from Redis using SCAN for efficient iteration with
+     * an asynchronous iterator.
+     * Only returns keys matching the configured key prefix.
+     *
+     * @returns {AsyncIterableIterator<T>} Asynchronous iterator with the entries
+     */
+    async *streamAll(): AsyncIterableIterator<T> {
+      for await (const keys of client.scanIterator({
+        TYPE: "STRING",
+        MATCH: `${keyPrefix}*`,
+      })) {
+        if (!keys.length) continue;
+
+        const entries = await client.mGet(keys);
+        for (const data of entries) {
+          if (data !== null) {
+            yield serializationAdapter.deserialize(data);
+          }
+        }
+      }
+    },
+
+    /**
      * Updates an existing entry in Redis.
      *
      * @param {T} entry - The entry with updated values
