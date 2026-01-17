@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { jsonSerializationAdapter } from "./serialization.js";
+import { createJsonSerializationAdapter } from "./serialization/json.js";
 import {
   DuplicateKeyError,
   type KeyCoercion,
@@ -63,7 +63,7 @@ export const jsonFileAdapter: FileAdapter = {
   fileName<K>(key: K): string {
     return `${key}.json`;
   },
-  ...jsonSerializationAdapter,
+  ...createJsonSerializationAdapter(),
 };
 
 /**

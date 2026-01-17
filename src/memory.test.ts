@@ -358,7 +358,7 @@ describe("createMemoryStorage", () => {
 
       try {
         await storage.update(user);
-      } catch (e) {
+      } catch (_e) {
         // Expected to throw
       }
 
@@ -455,6 +455,300 @@ describe("createMemoryStorage", () => {
       const retrieved = await complexStorage.get("1");
 
       expect(retrieved).toEqual(complexObj);
+    });
+  });
+
+  describe("with TTL (time-to-live)", () => {
+    it("should create entries that expire after TTL", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+
+      // Entry should exist immediately
+      expect(await storage.exists("1")).toBe(true);
+      expect(await storage.get("1")).toEqual({ id: "1", name: "John", email: "john@example.com" });
+
+      // Advance time by 500ms (still within TTL)
+      mockTime.current = 500;
+      expect(await storage.exists("1")).toBe(true);
+      expect(await storage.get("1")).toEqual({ id: "1", name: "John", email: "john@example.com" });
+
+      // Advance time to exactly TTL (entry should now be expired)
+      mockTime.current = 1000;
+      expect(await storage.exists("1")).toBe(false);
+      expect(await storage.get("1")).toBeNull();
+
+      // Advance time past TTL
+      mockTime.current = 1001;
+      expect(await storage.exists("1")).toBe(false);
+      expect(await storage.get("1")).toBeNull();
+    });
+
+    it("should update entries and reset TTL on update", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+
+      // Advance time by 800ms
+      mockTime.current = 800;
+
+      // Update the entry
+      await storage.update({ id: "1", name: "John Updated", email: "john.updated@example.com" });
+
+      // Advance time by another 500ms (total 1300ms from creation)
+      // But entry should still exist because TTL was reset on update
+      mockTime.current = 1300;
+      expect(await storage.exists("1")).toBe(true);
+      expect(await storage.get("1")).toEqual({
+        id: "1",
+        name: "John Updated",
+        email: "john.updated@example.com",
+      });
+
+      // Advance past the updated TTL (800 + 1000 = 1800)
+      mockTime.current = 1801;
+      expect(await storage.exists("1")).toBe(false);
+    });
+
+    it("should exclude expired entries from getAll", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+      await storage.create({ id: "2", name: "Jane", email: "jane@example.com" });
+
+      // Both entries should be present
+      expect(await storage.getAll()).toHaveLength(2);
+
+      // Advance time by 500ms and add a third entry
+      mockTime.current = 500;
+      await storage.create({ id: "3", name: "Bob", email: "bob@example.com" });
+      expect(await storage.getAll()).toHaveLength(3);
+
+      // Advance time to expire first two entries
+      mockTime.current = 1100;
+
+      const all = await storage.getAll();
+      expect(all).toHaveLength(1);
+      expect(all[0]).toEqual({ id: "3", name: "Bob", email: "bob@example.com" });
+    });
+
+    it("should exclude expired entries from getKeys", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+      await storage.create({ id: "2", name: "Jane", email: "jane@example.com" });
+
+      mockTime.current = 500;
+      await storage.create({ id: "3", name: "Bob", email: "bob@example.com" });
+
+      mockTime.current = 1100;
+
+      const keys = await storage.getKeys();
+      expect(keys).toEqual(["3"]);
+    });
+
+    it("should exclude expired entries from streamAll", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+      await storage.create({ id: "2", name: "Jane", email: "jane@example.com" });
+
+      mockTime.current = 500;
+      await storage.create({ id: "3", name: "Bob", email: "bob@example.com" });
+
+      mockTime.current = 1100;
+
+      const results: TestUser[] = [];
+      for await (const entry of storage.streamAll()) {
+        results.push(entry);
+      }
+
+      expect(results).toHaveLength(1);
+      expect(results[0]).toEqual({ id: "3", name: "Bob", email: "bob@example.com" });
+    });
+
+    it("should not allow updates to expired entries", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+
+      // Advance time past TTL
+      mockTime.current = 1001;
+
+      // Try to update the expired entry
+      await expect(
+        storage.update({ id: "1", name: "John Updated", email: "john.updated@example.com" }),
+      ).rejects.toThrow(KeyNotFoundError);
+      await expect(
+        storage.update({ id: "1", name: "John Updated", email: "john.updated@example.com" }),
+      ).rejects.toThrow('Key "1" not found');
+    });
+
+    it("should not allow deletion of expired entries", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+
+      // Advance time past TTL
+      mockTime.current = 1001;
+
+      // Try to delete the expired entry
+      await expect(storage.delete("1")).rejects.toThrow(KeyNotFoundError);
+      await expect(storage.delete("1")).rejects.toThrow('Key "1" not found');
+    });
+
+    it("should not allow creating entries with expired keys", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+
+      // Advance time past TTL
+      mockTime.current = 1001;
+
+      // Entry should be expired and cleaned up, so we can create a new one with the same key
+      await storage.create({ id: "1", name: "Jane", email: "jane@example.com" });
+      expect(await storage.get("1")).toEqual({ id: "1", name: "Jane", email: "jane@example.com" });
+    });
+
+    it("should handle mixed expired and non-expired entries", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      // Create entries at different times
+      await storage.create({ id: "1", name: "User 1", email: "user1@example.com" });
+
+      mockTime.current = 300;
+      await storage.create({ id: "2", name: "User 2", email: "user2@example.com" });
+
+      mockTime.current = 600;
+      await storage.create({ id: "3", name: "User 3", email: "user3@example.com" });
+
+      mockTime.current = 900;
+      await storage.create({ id: "4", name: "User 4", email: "user4@example.com" });
+
+      // At time 900, all entries should exist
+      expect(await storage.getAll()).toHaveLength(4);
+
+      // At time 1200, we should have:
+      // Entry 1: created at 0, expires at 1000 - EXPIRED
+      // Entry 2: created at 300, expires at 1300 - ALIVE
+      // Entry 3: created at 600, expires at 1600 - ALIVE
+      // Entry 4: created at 900, expires at 1900 - ALIVE
+      mockTime.current = 1200;
+      const all = await storage.getAll();
+      expect(all).toHaveLength(3);
+      expect(all.map((u) => u.id)).toEqual(["2", "3", "4"]);
+    });
+
+    it("should work with very short TTLs", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 10,
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+
+      expect(await storage.exists("1")).toBe(true);
+
+      mockTime.current = 11;
+      expect(await storage.exists("1")).toBe(false);
+    });
+
+    it("should work with very long TTLs", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 365 * 24 * 60 * 60 * 1000, // 1 year
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+
+      // Advance by 6 months
+      mockTime.current = 182 * 24 * 60 * 60 * 1000;
+
+      expect(await storage.exists("1")).toBe(true);
+      expect(await storage.get("1")).toEqual({ id: "1", name: "John", email: "john@example.com" });
+    });
+
+    it("should not expire entries when TTL is not configured", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        now: () => mockTime.current,
+      });
+
+      await storage.create({ id: "1", name: "John", email: "john@example.com" });
+
+      // Advance time significantly
+      mockTime.current = 365 * 24 * 60 * 60 * 1000; // 1 year
+
+      // Entry should still exist without TTL
+      expect(await storage.exists("1")).toBe(true);
+      expect(await storage.get("1")).toEqual({ id: "1", name: "John", email: "john@example.com" });
+    });
+
+    it("should handle cleanup of multiple expired entries efficiently", async () => {
+      const mockTime = { current: 0 };
+      const storage = createMemoryStorage<TestUser, "id">("id", {
+        ttl: 1000,
+        now: () => mockTime.current,
+      });
+
+      // Create 100 entries
+      for (let i = 0; i < 100; i++) {
+        await storage.create({ id: `${i}`, name: `User ${i}`, email: `user${i}@example.com` });
+      }
+
+      mockTime.current = 500;
+
+      // Create 50 more entries
+      for (let i = 100; i < 150; i++) {
+        await storage.create({ id: `${i}`, name: `User ${i}`, email: `user${i}@example.com` });
+      }
+
+      // Expire only the first 100 entries
+      // First batch created at time 0 (expire at 1000)
+      // Second batch created at time 500 (expire at 1500)
+      mockTime.current = 1200;
+
+      const all = await storage.getAll();
+      expect(all).toHaveLength(50);
+      expect(all.every((u) => Number.parseInt(u.id, 10) >= 100)).toBe(true);
     });
   });
 });

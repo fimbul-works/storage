@@ -1,5 +1,5 @@
 import { createClient, type RedisArgument } from "redis";
-import { jsonSerializationAdapter } from "./serialization.js";
+import { createJsonSerializationAdapter } from "./serialization/json.js";
 import {
   DuplicateKeyError,
   type KeyCoercion,
@@ -108,7 +108,7 @@ export async function createRedisStorage<T, K extends keyof T>(
 ): Promise<RedisStorage<T, K>> {
   const {
     url,
-    serializationAdapter = jsonSerializationAdapter,
+    serializationAdapter = createJsonSerializationAdapter(),
     keyPrefix = `${String(keyField)}:`,
     keyFromStorage = (raw: string) => raw as T[K],
   } = options;

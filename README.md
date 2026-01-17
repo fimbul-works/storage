@@ -2,6 +2,10 @@
 
 A type-safe, abstract storage system for TypeScript with a unified interface for CRUD operations across multiple backends.
 
+[![npm version](https://badge.fury.io/js/%40fimbul-works%2Fstorage.svg)](https://www.npmjs.com/package/@fimbul-works/storage)
+[![TypeScript](https://badges.frapsoft.com/typescript/code/typescript.svg?v=101)](https://github.com/microsoft/TypeScript)
+[![Bundle Size](https://img.shields.io/bundlephobia/minzip/@fimbul-works/storage)](https://bundlephobia.com/package/@fimbul-works/storage)
+
 ## Features
 
 - 🔷 **Type-safe** — Full TypeScript support with generics
@@ -20,6 +24,12 @@ For Redis support:
 
 ```bash
 npm install redis
+```
+
+For YAML serialization support:
+
+```bash
+npm install yaml
 ```
 
 ## Quick Start
@@ -56,8 +66,41 @@ await storage.delete('1');
 
 Fast storage using JavaScript's Map. Perfect for testing or temporary data.
 
+#### Basic Usage
+
 ```typescript
+import { createMemoryStorage } from '@fimbul-works/storage';
+
 const storage = createMemoryStorage<User, 'id'>('id');
+```
+
+#### TTL (Time-To-Live) Cache
+
+Configure in-memory storage as a temporary cache with automatic expiration:
+
+```typescript
+// Cache with 60-second TTL
+const cache = createMemoryStorage<User, 'id'>('id', { ttl: 60_000 });
+
+await cache.create({ id: '1', name: 'John', email: 'john@example.com' });
+
+// Entry exists immediately
+const user = await cache.get('1'); // Returns user
+
+// After 60 seconds, entry automatically expires
+const expiredUser = await cache.get('1'); // Returns null
+```
+
+**TTL Features:**
+- ⏱️ **Automatic Expiration**: Entries expire after the configured duration
+- 🔄 **TTL Reset**: Updating an entry resets its TTL
+- 🧹 **Lazy Cleanup**: Expired entries are removed on access
+- 🎯 **All Operations**: Works with `exists`, `get`, `getAll`, `getKeys`, `streamAll`, `update`, `delete`
+
+```typescript
+// Update resets the TTL
+await cache.update({ id: '1', name: 'John Updated', email: 'john@example.com' });
+// Entry now has a fresh 60-second TTL
 ```
 
 ### File-Based Storage
@@ -90,6 +133,28 @@ await storage.create({ id: '1', name: 'John', email: 'john@example.com' });
 storage.close();
 ```
 
+#### Custom Serialization for Redis
+
+Use custom serialization adapters with Redis:
+
+```typescript
+import { createRedisStorage, createYamlSerializationAdapter } from '@fimbul-works/storage/redis';
+
+const yamlRedisStorage = await createRedisStorage<User, 'id'>('id', {
+  url: 'redis://localhost:6379',
+  keyPrefix: 'users:',
+  serializationAdapter: createYamlSerializationAdapter(),
+});
+
+await yamlRedisStorage.create({
+  id: '1',
+  name: 'John Doe',
+  email: 'john@example.com',
+});
+
+yamlRedisStorage.close();
+```
+
 ### Layered Storage (Caching)
 
 Combine backends for cache-aside patterns. Layers are ordered top to bottom (fastest first).
@@ -106,6 +171,32 @@ const user = await storage.get('1');
 
 // Writes persist to all layers
 await storage.create({ id: '2', name: 'Jane', email: 'jane@example.com' });
+```
+
+#### TTL Cache with Persistent Storage
+
+Combine a time-limited cache with persistent storage for optimal performance:
+
+```typescript
+import { createLayeredStorage, createMemoryStorage, createFileStorage } from '@fimbul-works/storage';
+
+// 60-second in-memory cache
+const cache = createMemoryStorage<User, 'id'>('id', { ttl: 60_000 });
+
+// Persistent file storage
+const persistent = createFileStorage<User, 'id'>('id', { path: './data/users' });
+
+// Layered storage with cache on top
+const storage = createLayeredStorage([cache, persistent]);
+
+// First read loads from persistent storage and caches it
+const user1 = await storage.get('1'); // Loads from file, caches in memory
+
+// Subsequent reads within 60 seconds use cache
+const user2 = await storage.get('1'); // Returns from cache (fast!)
+
+// After 60 seconds, cache expires but data persists in files
+const user3 = await storage.get('1'); // Reloads from file, recaches
 ```
 
 All layers must share the same key field, which is automatically determined from the first layer.
@@ -205,7 +296,54 @@ redisStorage.close();
 
 ### Custom Serialization
 
-Create custom serialization adapters for different data formats:
+Create custom serialization adapters for different data formats.
+
+#### JSON Serialization (Default)
+
+JSON is the default serialization format for both file and Redis storage:
+
+```typescript
+import { createFileStorage, createJsonSerializationAdapter } from '@fimbul-works/storage';
+
+// Default JSON adapter
+const storage = createFileStorage<User, 'id'>('id', { path: './data/users' });
+
+// Custom JSON adapter with pretty printing
+const prettyJsonStorage = createFileStorage<User, 'id'>('id', {
+  path: './data/users',
+  adapter: {
+    encoding: 'utf-8',
+    fileName: (key) => `${key}.json`,
+    ...createJsonSerializationAdapter({ space: 2 }),
+  },
+});
+```
+
+#### YAML Serialization
+
+Use YAML for human-readable configuration files:
+
+```typescript
+import { createFileStorage, createYamlSerializationAdapter } from '@fimbul-works/storage';
+
+const yamlStorage = createFileStorage<User, 'id'>('id', {
+  path: './data/users',
+  adapter: {
+    encoding: 'utf-8',
+    fileName: (key) => `${key}.yaml`,
+    ...createYamlSerializationAdapter({ indent: 2 }),
+  },
+});
+
+await yamlStorage.create({
+  id: '1',
+  name: 'John Doe',
+  email: 'john@example.com',
+});
+// Creates: ./data/users/1.yaml
+```
+
+#### Custom CSV Serialization
 
 ```typescript
 import { createFileStorage, type FileAdapter } from '@fimbul-works/storage';
@@ -220,7 +358,10 @@ const csvAdapter: FileAdapter<User, 'id'> = {
   },
 };
 
-const storage = createFileStorage('id', { path: './data/users', adapter: csvAdapter });
+const storage = createFileStorage<User, 'id'>('id', {
+  path: './data/users',
+  adapter: csvAdapter,
+});
 ```
 
 ### Different Key Fields
