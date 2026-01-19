@@ -15,23 +15,6 @@ import {
  *
  * @template T - The type of entity to serialize/deserialize
  * @template {keyof T} K - The key field of the entity
- *
- * @example
- * ```typescript
- * const csvAdapter: FileAdapter<User, "id"> = {
- *   encoding: "utf-8",
- *   fileName(key) {
- *     return `user_${key}.csv`;
- *   },
- *   serialize(user) {
- *   return `${user.id},${user.name},${user.email}`;
- * },
- *   deserialize(str) {
- *   const [id, name, email] = str.split(",");
- *   return { id, name, email };
- * },
- * };
- * ```
  */
 export interface FileAdapter<T = any, K extends keyof T = keyof T> extends SerializationAdapter<T> {
   /**
@@ -50,13 +33,6 @@ export interface FileAdapter<T = any, K extends keyof T = keyof T> extends Seria
 
 /**
  * Default JSON file adapter for serializing entities as JSON files.
- *
- * @example
- * ```typescript
- * const storage = createFileStorage("/tmp/users", "id", jsonFileAdapter);
- * await storage.create({ id: "1", name: "John" });
- * // Creates file: /tmp/users/1.json
- * ```
  */
 export const jsonFileAdapter: FileAdapter = {
   encoding: "utf-8",
@@ -71,15 +47,6 @@ export const jsonFileAdapter: FileAdapter = {
  *
  * @template T - The type of entity to store
  * @template {keyof T} K - The key field of the entity
- *
- * @example
- * ```typescript
- * const options: FileStorageOptions<User, "id"> = {
- *   path: "./data/users",
- *   adapter: customFileAdapter,
- *   keyFromStorage: (raw) => Number.parseInt(raw, 10),
- * };
- * ```
  */
 export interface FileStorageOptions<T, K extends keyof T = keyof T> extends KeyCoercion<T, K> {
   /**
@@ -105,23 +72,6 @@ export interface FileStorageOptions<T, K extends keyof T = keyof T> extends KeyC
  * @param {K} keyField - The field to use as the unique key
  * @param {FileStorageOptions} options - Configuration options (path is required)
  * @returns {Storage<T, K>} A Storage implementation backed by the filesystem
- *
- * @example
- * ```typescript
- * interface User {
- *   id: number;
- *   name: string;
- *   email: string;
- * }
- *
- * const storage = createFileStorage<User, "id">("id", {
- *   path: "./data/users",
- *   keyFromStorage: (raw) => Number.parseInt(raw, 10),
- * });
- * await storage.create({ id: 1, name: "John", email: "john@example.com" });
- * // Creates file: ./data/users/1.json
- * await storage.getKeys(); // Returns [1, 2, 3] as numbers
- * ```
  */
 export function createFileStorage<T, K extends keyof T = keyof T>(
   keyField: K,

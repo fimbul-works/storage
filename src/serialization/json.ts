@@ -2,13 +2,11 @@ import type { SerializationAdapter } from "../types";
 
 /**
  * Creates a JSON serialization adapter.
- *
- * @example
- * ```typescript
- * const storage = await createRedisStorage("id", {
- *   serializationAdapter: createJsonSerializationAdapter(),
- * });
- * ```
+ * @template T - The type of entity to serialize/deserialize
+ * @param {object} options - Optional configuration for JSON serialization
+ * @param {(key: string, value: any) => any} [options.replacer] - Replacer function for JSON.stringify
+ * @param {string | number} [options.space] - Space argument for JSON.stringify (pretty print)
+ * @returns {SerializationAdapter<T, string>} JSON serialization adapter
  */
 export function createJsonSerializationAdapter<T = any>(options?: {
   /** Replacer function for JSON.stringify */

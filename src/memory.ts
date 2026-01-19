@@ -4,15 +4,8 @@ import { DuplicateKeyError, KeyNotFoundError, type Storage } from "./types.js";
  * Configuration options for in-memory storage.
  *
  * @template T - The type of entity to store
- *
- * @example
- * ```typescript
- * const options: MemoryStorageOptions<User> = {
- *   ttl: 60000, // Entries expire after 60 seconds
- * };
- * ```
  */
-export interface MemoryStorageOptions<T = any> {
+export interface MemoryStorageOptions {
   /**
    * Time-to-live in milliseconds for entries.
    * When set, entries will automatically expire after this duration.
@@ -37,29 +30,6 @@ export interface MemoryStorageOptions<T = any> {
  * @param {K} keyField - The field to use as the unique key
  * @param {MemoryStorageOptions} options - Configuration options (optional)
  * @returns {Storage<T, K>} A Storage implementation backed by an in-memory Map
- *
- * @example
- * ```typescript
- * interface User {
- *   id: string;
- *   name: string;
- *   email: string;
- * }
- *
- * // Simple in-memory storage
- * const storage = createMemoryStorage<User, "id">("id");
- * await storage.create({ id: "1", name: "John", email: "john@example.com" });
- * const user = await storage.get("1");
- * ```
- *
- * @example
- * ```typescript
- * // In-memory storage with TTL (60 seconds)
- * const storage = createMemoryStorage<User, "id">("id", { ttl: 60000 });
- * await storage.create({ id: "1", name: "John", email: "john@example.com" });
- * // After 60 seconds, the entry will be automatically expired
- * const user = await storage.get("1"); // Returns null
- * ```
  */
 export function createMemoryStorage<T, K extends keyof T = keyof T>(
   keyField: K,

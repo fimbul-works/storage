@@ -17,27 +17,6 @@ import { DuplicateKeyError, KeyNotFoundError, type Storage } from "./types.js";
  * @returns {Storage<T, K>} A Storage implementation that combines all layers
  * @throws {Error} If no layers are provided
  * @throws {Error} If layers have different key fields
- *
- * @example
- * ```typescript
- * interface User {
- *   id: string;
- *   name: string;
- *   email: string;
- * }
- *
- * const memoryStorage = createMemoryStorage<User, "id">("id");
- * const fileStorage = createFileStorage<User, "id">("./data/users", "id");
- *
- * // Create a layered storage with memory cache on top of file storage
- * const storage = createLayeredStorage([memoryStorage, fileStorage]);
- *
- * // get() will check memory first, then file
- * const user = await storage.get("1");
- *
- * // create() writes to both layers (keeps cache in sync)
- * await storage.create({ id: "2", name: "Jane", email: "jane@example.com" });
- * ```
  */
 export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>[]): Storage<T, K> {
   if (layers.length === 0) {

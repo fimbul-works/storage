@@ -13,13 +13,6 @@ import {
  *
  * @template T - The type of entity to store
  * @template {keyof T} K - The key field of the entity
- *
- * @example
- * ```typescript
- * const storage = await createRedisStorage<User, "id">("id");
- * await storage.create({ id: "1", name: "John" });
- * storage.close(); // Cleanly close the connection
- * ```
  */
 export interface RedisStorage<T, K extends keyof T> extends Storage<T, K> {
   /**
@@ -29,11 +22,6 @@ export interface RedisStorage<T, K extends keyof T> extends Storage<T, K> {
 
   /**
    * Closes the Redis connection.
-   *
-   * @example
-   * ```typescript
-   * storage.close();
-   * ```
    */
   close(): void;
 }
@@ -43,16 +31,6 @@ export interface RedisStorage<T, K extends keyof T> extends Storage<T, K> {
  *
  * @template T - The type of entity to store
  * @template {keyof T} K - The key field of the entity
- *
- * @example
- * ```typescript
- * const options: RedisStorageOptions<User, "id"> = {
- *   url: "redis://localhost:6379",
- *   keyPrefix: "users:",
- *   serializationAdapter: customAdapter,
- *   keyFromStorage: (raw) => Number.parseInt(raw, 10),
- * };
- * ```
  */
 export interface RedisStorageOptions<T, K extends keyof T = keyof T> extends KeyCoercion<T, K> {
   /**
@@ -83,24 +61,6 @@ export interface RedisStorageOptions<T, K extends keyof T = keyof T> extends Key
  * @param {K} keyField - The field to use as the unique key
  * @param {RedisStorageOptions} options - Configuration options for Redis storage
  * @returns {Promise<RedisStorage<T, K>>} Promise resolving to a RedisStorage instance
- *
- * @example
- * ```typescript
- * interface User {
- *   id: string;
- *   name: string;
- *   email: string;
- * }
- *
- * const storage = await createRedisStorage<User, "id">("id", {
- *   url: "redis://localhost:6379",
- *   keyPrefix: "users:",
- * });
- *
- * await storage.create({ id: "1", name: "John", email: "john@example.com" });
- * const user = await storage.get("1");
- * storage.close();
- * ```
  */
 export async function createRedisStorage<T, K extends keyof T>(
   keyField: K,
@@ -303,11 +263,6 @@ export async function createRedisStorage<T, K extends keyof T>(
     /**
      * Closes the Redis connection.
      * Always call this when done using the storage to properly close the connection.
-     *
-     * @example
-     * ```typescript
-     * storage.close();
-     * ```
      */
     close(): void {
       client.close();

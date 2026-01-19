@@ -13,12 +13,10 @@ import type { SerializationAdapter } from "../types";
 /**
  * YAML serialization adapter.
  *
- * @example
- * ```typescript
- * const storage = await createRedisStorage("id", {
- *   serializationAdapter: yamlSerializationAdapter,
- * });
- * ```
+ * @template T - The type of entity to serialize/deserialize
+ * @param {DocumentOptions & SchemaOptions & ParseOptions & CreateNodeOptions & ToStringOptions} [stringifyOptions] - Options for YAML stringification
+ * @param {ParseOptions & DocumentOptions & SchemaOptions & ToJSOptions} [parseOptions] - Options for YAML parsing
+ * @returns {SerializationAdapter<T, string>} YAML serialization adapter
  */
 export function createYamlSerializationAdapter<T>(
   stringifyOptions?: DocumentOptions & SchemaOptions & ParseOptions & CreateNodeOptions & ToStringOptions,
@@ -28,7 +26,6 @@ export function createYamlSerializationAdapter<T>(
     /**
      * Serializes an entity to a YAML string.
      *
-     * @template T - The type of entity
      * @param {T} entry - The entry to serialize
      * @returns {string} YAML string representation
      */
@@ -39,7 +36,6 @@ export function createYamlSerializationAdapter<T>(
     /**
      * Deserializes a YAML string back to an entity.
      *
-     * @template T - The type of entity
      * @param {string} str - The YAML string to deserialize
      * @returns {T} The deserialized entity
      */
