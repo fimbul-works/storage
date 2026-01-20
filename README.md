@@ -11,7 +11,8 @@ A type-safe, abstract storage system for TypeScript with a unified interface for
 - 🔷 **Type-safe** — Full TypeScript support with generics
 - 🗄️ **Multiple Backends** — In-memory, file-based, Redis, and layered storage
 - 🔌 **Custom Serialization** — Pluggable adapters for different data formats
-- 📊 **Efficient Data Access** — Stream large datasets or retrieve all keys without loading entries
+- 📊 **Efficient Data Access** — Stream large datasets, batch retrieve entries, or list all keys
+- 🔔 **Real-time Events** — Subscribe to document creation, updates, and deletions
 - ⚠️ **Error Handling** — Specific error types for duplicate keys and missing entries
 
 ## Installation
@@ -203,9 +204,23 @@ All layers must share the same key field, which is automatically determined from
 
 **Layer behavior:**
 - **exists/get**: Check layers top-down, return first match
+- **getMany**: Batch retrieve multiple keys efficiently
 - **create/update**: Write to all layers
 - **delete**: Remove from all layers that have the key
 - **getAll/streamAll/getKeys**: Merge all layers (top layer wins for duplicates)
+
+#### Reactive Cache Sync (Event Bubbling)
+
+Layered storage automatically keeps upper layers in sync with lower layers. If a lower-level storage (like persistent file storage) emits a change (e.g., from an external file edit), the upper layers (like an in-memory cache) automatically update their state:
+
+```typescript
+const cache = createMemoryStorage<User, 'id'>('id');
+const persistent = createFileStorage<User, 'id'>('id', { path: './data/users' });
+const storage = createLayeredStorage([cache, persistent]);
+
+// If a file is modified directly on disk, the 'cache' layer
+// of the 'storage' instance will automatically update!
+```
 
 ## API Reference
 
@@ -217,16 +232,50 @@ All storage implementations implement the `Storage<T, K>` interface:
 | `exists(key)` | Check if entry exists | `Promise<boolean>` |
 | `create(entry)` | Create new entry | `Promise<void>` |
 | `get(key)` | Retrieve entry by key | `Promise<T \| null>` |
+| `getMany(keys)` | Retrieve multiple entries by keys | `Promise<T[]>` |
 | `getAll()` | Retrieve all entries | `Promise<T[]>` |
 | `getKeys()` | Retrieve all keys | `Promise<T[K][]>` |
 | `streamAll()` | Stream all entries | `AsyncIterableIterator<T>` |
 | `update(entry)` | Update existing entry | `Promise<void>` |
 | `delete(key)` | Delete entry | `Promise<void>` |
+| `on(event, cb)` | Subscribe to storage events | `() => void` (cleanup) |
 
 ### Error Types
 
 - **DuplicateKeyError**: Thrown when creating an entry with an existing key
 - **KeyNotFoundError**: Thrown when updating/deleting a non-existent entry
+
+## Storage Events
+
+All storage implementations support reactive events, allowing you to react to data changes in real-time.
+
+```typescript
+const storage = createMemoryStorage<User, 'id'>('id');
+
+const unsubscribe = storage.on('create', (entry) => {
+  console.log('New user created:', entry.name);
+});
+
+storage.on('update', (entry) => {
+  console.log('User updated:', entry.id);
+});
+
+storage.on('delete', (entry) => {
+  console.log('User deleted:', entry.id);
+});
+
+// Stop listening
+unsubscribe();
+```
+
+### Event Support
+- **MemoryStorage**: Immediate emission on local changes.
+- **FileStorage**: Integrated with `chokidar` to detect external filesystem changes.
+- **LayeredStorage**: Proxies top-layer events and bubbles lower-layer changes upwards.
+- **RedisStorage**: ⚠️ Currently unimplemented (API provided for consistency).
+
+> [!NOTE]
+> Event support for **Redis** (via Pub/Sub) is planned for a future release. Currently, attaching a listener to a Redis storage will not result in any callbacks being triggered.
 
 ## Advanced Usage
 

@@ -136,7 +136,9 @@ describe("LayeredStorage", () => {
 
     await memory2.create({ id: "1", name: "Bottom", email: "bottom@example.com" });
     await memory2.create({ id: "2", name: "Bottom2", email: "bottom2@example.com" });
-    await memory1.create({ id: "1", name: "Top", email: "top@example.com" });
+
+    // Proactive bubbling already put "Bottom" in memory1. Let's update it to "Top".
+    await memory1.update({ id: "1", name: "Top", email: "top@example.com" });
 
     const all = await storage.getAll();
 
@@ -239,18 +241,13 @@ describe("LayeredStorage", () => {
 
     await memory3.create({ id: "1", name: "Deep", email: "deep@example.com" });
 
-    // Initial state: only memory3 has it
-    expect(await memory1.exists("1")).toBe(false);
-    expect(await memory2.exists("1")).toBe(false);
+    // With proactive bubbling, all upper layers should have it immediately!
+    expect(await memory1.exists("1")).toBe(true);
+    expect(await memory2.exists("1")).toBe(true);
     expect(await memory3.exists("1")).toBe(true);
 
     const user = await storage.get("1");
     expect(user).toEqual({ id: "1", name: "Deep", email: "deep@example.com" });
-
-    // After get: all layers should have it
-    expect(await memory1.get("1")).toEqual({ id: "1", name: "Deep", email: "deep@example.com" });
-    expect(await memory2.get("1")).toEqual({ id: "1", name: "Deep", email: "deep@example.com" });
-    expect(await memory3.get("1")).toEqual({ id: "1", name: "Deep", email: "deep@example.com" });
   });
 
   it("should bubble up entries in getAll", async () => {
@@ -259,13 +256,13 @@ describe("LayeredStorage", () => {
     await memory2.create({ id: "1", name: "User1", email: "u1@example.com" });
     await memory2.create({ id: "2", name: "User2", email: "u2@example.com" });
 
-    // memory1 is empty
-    expect(await memory1.getAll()).toHaveLength(0);
+    // With event bubbling, memory1 is NOT empty anymore - it's already populated!
+    expect(await memory1.getAll()).toHaveLength(2);
 
     const all = await storage.getAll();
     expect(all).toHaveLength(2);
 
-    // After getAll: memory1 should be populated
+    // memory1 remains populated
     const m1Entries = await memory1.getAll();
     expect(m1Entries).toHaveLength(2);
     expect(m1Entries).toEqual(expect.arrayContaining(all));
@@ -288,8 +285,8 @@ describe("LayeredStorage", () => {
     // Update memory2 manually (stale cache scenario)
     await memory2.update({ id: "1", name: "Updated", email: "u@example.com" });
 
-    // First get returns from ttlMemory (cache hit, but stale)
-    expect(await storage.get("1")).toEqual({ id: "1", name: "Initial", email: "i@example.com" });
+    // With event bubbling, the cache should have updated immediately
+    expect(await storage.get("1")).toEqual({ id: "1", name: "Updated", email: "u@example.com" });
 
     // Advance time past TTL
     mockTime += 600;

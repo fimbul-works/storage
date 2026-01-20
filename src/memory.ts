@@ -38,6 +38,17 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(
   const { ttl, now = Date.now } = options ?? {};
   const data = new Map<T[K], T>();
   const expirations = ttl ? new Map<T[K], number>() : undefined;
+  const listeners: Record<string, Set<(entry: T) => void>> = {
+    create: new Set(),
+    update: new Set(),
+    delete: new Set(),
+  };
+
+  const emit = (event: string, entry: T) => {
+    for (const callback of listeners[event]) {
+      callback(entry);
+    }
+  };
 
   /**
    * Removes expired entries from the storage.
@@ -113,6 +124,7 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(
       if (ttl && expirations) {
         expirations.set(key, now() + ttl);
       }
+      emit("create", entry);
     },
 
     /**
@@ -130,6 +142,27 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(
         return null;
       }
       return data.get(key) ?? null;
+    },
+
+    /**
+     * Retrieves multiple entries from the in-memory storage.
+     * Expired entries are automatically excluded.
+     *
+     * @param {T[K][]} keys - The keys of the entries to retrieve
+     * @returns {Promise<T[]>} Promise that resolves to an array of found entries
+     */
+    async getMany(keys: T[K][]): Promise<T[]> {
+      cleanupExpired();
+      const results: T[] = [];
+      for (const key of keys) {
+        if (!isExpired(key)) {
+          const entry = data.get(key);
+          if (entry !== undefined) {
+            results.push(entry);
+          }
+        }
+      }
+      return results;
     },
 
     /**
@@ -186,23 +219,33 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(
       if (ttl && expirations) {
         expirations.set(key, now() + ttl);
       }
+      emit("update", entry);
     },
 
-    /**
-     * Deletes an entry from the in-memory storage.
-     *
-     * @param {T[K]} key - The key of the entry to delete
-     * @returns {Promise<void>} Promise that resolves when the entry is deleted
-     * @throws {KeyNotFoundError} If the key does not exist
-     */
     async delete(key: T[K]): Promise<void> {
       cleanupExpired();
       if (isExpired(key) || !data.has(key)) {
         throw new KeyNotFoundError(`Key "${key}" not found`);
       }
 
+      const entry = data.get(key)!;
       data.delete(key);
       expirations?.delete(key);
+      emit("delete", entry);
+    },
+
+    /**
+     * Subscribes to storage events.
+     *
+     * @param event - The event type: "create", "update", or "delete"
+     * @param callback - Function called with the document
+     * @returns A cleanup function to unsubscribe from the listener
+     */
+    on(event: "create" | "update" | "delete", callback: (entry: T) => void): () => void {
+      listeners[event].add(callback);
+      return () => {
+        listeners[event].delete(callback);
+      };
     },
   };
 }

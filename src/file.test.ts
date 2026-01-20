@@ -520,7 +520,7 @@ describe("createFileStorage", () => {
       const documentAdapter: FileAdapter<Document, "docId"> = {
         encoding: "utf-8",
         fileName(key: string): string {
-          return `doc-${key}-v1.json`;
+          return `entry-${key}-v1.json`;
         },
         serialize(entry: Document): string {
           return JSON.stringify(entry);
@@ -537,8 +537,8 @@ describe("createFileStorage", () => {
         { docId: "xyz", title: "Doc X" },
       ];
 
-      for (const doc of docs) {
-        await docStorage.create(doc);
+      for (const entry of docs) {
+        await docStorage.create(entry);
       }
 
       const keys = await docStorage.getKeys();

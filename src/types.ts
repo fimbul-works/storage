@@ -37,6 +37,14 @@ export interface Storage<T, K extends keyof T = keyof T> {
   get(key: T[K]): Promise<T | null>;
 
   /**
+   * Retrieves multiple entries by their keys.
+   *
+   * @param {T[K][]} keys - The keys of the entries to retrieve
+   * @returns {Promise<T[]>} Promise that resolves to an array of found entries
+   */
+  getMany(keys: T[K][]): Promise<T[]>;
+
+  /**
    * Retrieves all entries from storage.
    *
    * @returns {Promise<T[]>} Promise that resolves to an array of all entries
@@ -74,7 +82,21 @@ export interface Storage<T, K extends keyof T = keyof T> {
    * @throws {KeyNotFoundError} If the key does not exist in storage
    */
   delete(key: T[K]): Promise<void>;
+
+  /**
+   * Subscribes to storage events.
+   *
+   * @param event - The event type: "create", "update", or "delete"
+   * @param callback - Function called with the document or last known version of the document
+   * @returns A cleanup function to unsubscribe from the listener
+   */
+  on(event: "create" | "update" | "delete", callback: (entry: T) => void): () => void;
 }
+
+/**
+ * Event types supported by the storage listener.
+ */
+export type StorageEvent = "create" | "update" | "delete";
 
 /**
  * Adapter interface for serializing and deserializing entities.

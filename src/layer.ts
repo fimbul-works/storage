@@ -30,7 +30,7 @@ export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>
   }
   const keyField = uniqueKeyFields[0];
 
-  return {
+  const storage: Storage<T, K> = {
     /**
      * Read-only field that is used as the key.
      * @type {K}
@@ -105,6 +105,18 @@ export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>
         skippedLayers.push(layer);
       }
       return null;
+    },
+
+    /**
+     * Retrieves multiple entries by checking layers top to bottom.
+     * Found entries are bubbled up to upper layers.
+     *
+     * @param {T[K][]} keys - The keys of the entries to retrieve
+     * @returns {Promise<T[]>} Promise that resolves to an array of found entries
+     */
+    async getMany(keys: T[K][]): Promise<T[]> {
+      const results = await Promise.all(keys.map((key) => this.get(key)));
+      return results.filter((entry) => entry !== null);
     },
 
     /**
@@ -237,5 +249,44 @@ export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>
         }),
       );
     },
+
+    /**
+     * Subscribes to storage events.
+     * Layered storage proxies events from the top layer.
+     *
+     * @param event - The event type: "create", "update", or "delete"
+     * @param callback - Function called with the document
+     * @returns A cleanup function to unsubscribe from the listener
+     */
+    on(event: "create" | "update" | "delete", callback: (entry: T) => void): () => void {
+      return layers[0].on(event, callback);
+    },
   };
+
+  // Hook layers together for bubbling
+  for (let i = 0; i < layers.length - 1; i++) {
+    const higher = layers[i];
+    const lower = layers[i + 1];
+
+    lower.on("create", (entry) => {
+      higher.create(entry).catch(() => {
+        /* Already exists or other error */
+      });
+    });
+
+    lower.on("update", (entry) => {
+      higher.update(entry).catch(() => {
+        // If not found in higher, create it
+        higher.create(entry).catch(() => {});
+      });
+    });
+
+    lower.on("delete", (entry) => {
+      higher.delete(entry[keyField] as any).catch(() => {
+        /* Already deleted or not found */
+      });
+    });
+  }
+
+  return storage;
 }

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync } from "node:fs";
 import { readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+import { watch } from "chokidar";
 import { createJsonSerializationAdapter } from "./serialization/json.js";
 import {
   DuplicateKeyError,
@@ -102,6 +103,14 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
   };
 
   const filePattern = createFilePattern();
+  const listeners: Record<string, Set<(entry: T) => void>> = {
+    create: new Set(),
+    update: new Set(),
+    delete: new Set(),
+  };
+
+  let watcherInitialized = false;
+  let watcher: ReturnType<typeof watch> | undefined;
 
   return {
     /**
@@ -164,6 +173,17 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
       }
 
       return adapter.deserialize(await readFile(fileName, adapter.encoding));
+    },
+
+    /**
+     * Retrieves multiple entries by their keys.
+     *
+     * @param {T[K][]} keys - The keys of the entries to retrieve
+     * @returns {Promise<T[]>} Promise that resolves to an array of found entries
+     */
+    async getMany(keys: T[K][]): Promise<T[]> {
+      const results = await Promise.all(keys.map((key) => this.get(key)));
+      return results.filter((entry) => entry !== null);
     },
 
     /**
@@ -260,6 +280,63 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
       }
 
       await rm(fileName);
+    },
+
+    /**
+     * Subscribes to storage events.
+     *
+     * @param event - The event type: "create", "update", or "delete"
+     * @param callback - Function called with the document
+     * @returns A cleanup function to unsubscribe from the listener
+     */
+    on(event: "create" | "update" | "delete", callback: (entry: T) => void): () => void {
+      if (!watcherInitialized) {
+        watcher = watch(path, {
+          ignoreInitial: true,
+          depth: 0,
+        });
+
+        watcher.on("all", async (chokidarEvent, changedPath) => {
+          const fileName = basename(changedPath);
+          const match = fileName.match(filePattern);
+          if (!match?.[1]) return;
+
+          const key = keyFromStorage(match[1]);
+
+          if (chokidarEvent === "add" || chokidarEvent === "change") {
+            try {
+              const data = await readFile(changedPath, adapter.encoding);
+              const entry = adapter.deserialize(data);
+              const ev = chokidarEvent === "add" ? "create" : "update";
+              for (const cb of listeners[ev]) {
+                cb(entry);
+              }
+            } catch (_err) {
+              // Ignore errors (e.g. file busy or deleted)
+            }
+          } else if (chokidarEvent === "unlink") {
+            const entry = { [keyField]: key } as unknown as T;
+            for (const cb of listeners.delete) {
+              cb(entry);
+            }
+          }
+        });
+
+        watcherInitialized = true;
+      }
+
+      listeners[event].add(callback);
+
+      return () => {
+        listeners[event].delete(callback);
+
+        // Close watcher if no listeners are left
+        if (listeners.create.size === 0 && listeners.update.size === 0 && listeners.delete.size === 0) {
+          watcher?.close();
+          watcher = undefined;
+          watcherInitialized = false;
+        }
+      };
     },
   };
 }

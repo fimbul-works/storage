@@ -139,6 +139,21 @@ export async function createRedisStorage<T, K extends keyof T>(
     },
 
     /**
+     * Retrieves multiple entries from Redis.
+     *
+     * @param {T[K][]} keys - The keys of the entries to retrieve
+     * @returns {Promise<T[]>} Promise that resolves to an array of found entries
+     */
+    async getMany(keys: T[K][]): Promise<T[]> {
+      if (keys.length === 0) return [];
+
+      const redisKeys = keys.map((k) => makeKey(k));
+      const data = await client.mGet(redisKeys);
+
+      return data.filter((d): d is string => d !== null).map((d) => serializationAdapter.deserialize(d));
+    },
+
+    /**
      * Retrieves all entries from Redis using SCAN for efficient iteration.
      * Only returns keys matching the configured key prefix.
      *
@@ -253,6 +268,19 @@ export async function createRedisStorage<T, K extends keyof T>(
       }
 
       await client.del(redisKey);
+    },
+
+    /**
+     * Subscribes to storage events.
+     * Note: Redis events are currently unimplemented.
+     *
+     * @param event - The event type
+     * @param callback - The callback function
+     * @returns A cleanup function
+     */
+    on(_event: "create" | "update" | "delete", _callback: (entry: T) => void): () => void {
+      console.log(`Redis storage events are currently unimplemented`);
+      return () => {};
     },
 
     /**
