@@ -207,27 +207,102 @@ describe("LayeredStorage", () => {
     expect(fromFile).toEqual({ id: "1", name: "John", email: "john@example.com" });
   });
 
-  it("should demonstrate cache-aside pattern", async () => {
+  it("should demonstrate cache-aside pattern (bubble-up)", async () => {
     const storage = createLayeredStorage([memory1, file]);
 
     // Create in persistent storage
     await file.create({ id: "1", name: "John", email: "john@example.com" });
 
-    // First get - fetches from file (cache miss)
+    // Initially memory (cache) is empty
+    expect(await memory1.exists("1")).toBe(false);
+
+    // First get - fetches from file and bubbles up to memory
     const user1 = await storage.get("1");
     expect(user1).toEqual({ id: "1", name: "John", email: "john@example.com" });
-    expect(await memory1.exists("1")).toBe(false);
+    expect(await memory1.exists("1")).toBe(true);
 
     // Update through layered storage - writes to both
     await storage.update({ id: "1", name: "John Updated", email: "john@example.com" });
 
     // Now both layers have it
-    expect(await memory1.exists("1")).toBe(true);
-    expect(await file.exists("1")).toBe(true);
+    expect(await memory1.get("1")).toEqual({ id: "1", name: "John Updated", email: "john@example.com" });
+    expect(await file.get("1")).toEqual({ id: "1", name: "John Updated", email: "john@example.com" });
 
     // Second get - fetches from memory (cache hit)
     const user2 = await storage.get("1");
     expect(user2).toEqual({ id: "1", name: "John Updated", email: "john@example.com" });
+  });
+
+  it("should bubble up entry to all upper layers on cache miss", async () => {
+    const memory3 = createMemoryStorage<User, "id">("id");
+    const storage = createLayeredStorage([memory1, memory2, memory3]);
+
+    await memory3.create({ id: "1", name: "Deep", email: "deep@example.com" });
+
+    // Initial state: only memory3 has it
+    expect(await memory1.exists("1")).toBe(false);
+    expect(await memory2.exists("1")).toBe(false);
+    expect(await memory3.exists("1")).toBe(true);
+
+    const user = await storage.get("1");
+    expect(user).toEqual({ id: "1", name: "Deep", email: "deep@example.com" });
+
+    // After get: all layers should have it
+    expect(await memory1.get("1")).toEqual({ id: "1", name: "Deep", email: "deep@example.com" });
+    expect(await memory2.get("1")).toEqual({ id: "1", name: "Deep", email: "deep@example.com" });
+    expect(await memory3.get("1")).toEqual({ id: "1", name: "Deep", email: "deep@example.com" });
+  });
+
+  it("should bubble up entries in getAll", async () => {
+    const storage = createLayeredStorage([memory1, memory2]);
+
+    await memory2.create({ id: "1", name: "User1", email: "u1@example.com" });
+    await memory2.create({ id: "2", name: "User2", email: "u2@example.com" });
+
+    // memory1 is empty
+    expect(await memory1.getAll()).toHaveLength(0);
+
+    const all = await storage.getAll();
+    expect(all).toHaveLength(2);
+
+    // After getAll: memory1 should be populated
+    const m1Entries = await memory1.getAll();
+    expect(m1Entries).toHaveLength(2);
+    expect(m1Entries).toEqual(expect.arrayContaining(all));
+  });
+
+  it("should update cache after TTL expiration", async () => {
+    let mockTime = 1000;
+    const ttlMemory = createMemoryStorage<User, "id">("id", {
+      ttl: 500,
+      now: () => mockTime,
+    });
+    const storage = createLayeredStorage([ttlMemory, memory2]);
+
+    await storage.create({ id: "1", name: "Initial", email: "i@example.com" });
+
+    // Both have it
+    expect(await ttlMemory.exists("1")).toBe(true);
+    expect(await memory2.exists("1")).toBe(true);
+
+    // Update memory2 manually (stale cache scenario)
+    await memory2.update({ id: "1", name: "Updated", email: "u@example.com" });
+
+    // First get returns from ttlMemory (cache hit, but stale)
+    expect(await storage.get("1")).toEqual({ id: "1", name: "Initial", email: "i@example.com" });
+
+    // Advance time past TTL
+    mockTime += 600;
+
+    // ttlMemory entry expired
+    expect(await ttlMemory.exists("1")).toBe(false);
+
+    // Second get should trigger bubble-up from memory2
+    const user = await storage.get("1");
+    expect(user).toEqual({ id: "1", name: "Updated", email: "u@example.com" });
+
+    // Cache should be updated
+    expect(await ttlMemory.get("1")).toEqual({ id: "1", name: "Updated", email: "u@example.com" });
   });
 
   it("should work with single layer", async () => {

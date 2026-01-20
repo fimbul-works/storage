@@ -1,7 +1,7 @@
 {
   "name": "@fimbul-works/storage",
   "description": "Type-safe storage abstraction for TypeScript with unified CRUD interface",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "type": "module",
   "private": false,
   "license": "MIT",

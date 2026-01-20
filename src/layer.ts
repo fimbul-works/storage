@@ -81,11 +81,28 @@ export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>
      * @returns {Promise<T | null>} Promise that resolves to the entry if found in any layer, `null` otherwise
      */
     async get(key: T[K]): Promise<T | null> {
+      const skippedLayers: Storage<T, K>[] = [];
       for (const layer of layers) {
         const entry = await layer.get(key);
         if (entry !== null) {
+          // Found it! Bubble up to skipped layers
+          if (skippedLayers.length > 0) {
+            await Promise.all(
+              skippedLayers.map(async (skippedLayer) => {
+                try {
+                  await skippedLayer.create(entry);
+                } catch (error) {
+                  // Ignore duplicate key errors as it means it was already populated
+                  if (!(error instanceof DuplicateKeyError)) {
+                    throw error;
+                  }
+                }
+              }),
+            );
+          }
           return entry;
         }
+        skippedLayers.push(layer);
       }
       return null;
     },
@@ -98,19 +115,46 @@ export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>
      * @returns {Promise<T[]>} Promise that resolves to an array of all unique entries
      */
     async getAll(): Promise<T[]> {
-      // Read all layers from bottom to top
-      const allEntries = await Promise.all([...layers].reverse().map((layer) => layer.getAll()));
+      // Read all layers and their entries
+      const layerResults = await Promise.all(
+        layers.map(async (layer) => {
+          const entries = await layer.getAll();
+          return { layer, entries, keys: new Set(entries.map((e) => e[keyField])) };
+        }),
+      );
 
       // Merge entries, keeping the last occurrence (from top layers)
       const mergedMap = new Map<T[K], T>();
-
-      for (const entries of allEntries) {
-        for (const entry of entries) {
+      for (const result of [...layerResults].reverse()) {
+        for (const entry of result.entries) {
           mergedMap.set(entry[keyField], entry);
         }
       }
 
-      return Array.from(mergedMap.values());
+      const mergedEntries = Array.from(mergedMap.values());
+
+      // Bubble up: for each layer, find entries in the merged set that it doesn't have
+      await Promise.all(
+        layerResults.map(async (result) => {
+          const missingEntries = mergedEntries.filter((entry) => !result.keys.has(entry[keyField]));
+          if (missingEntries.length > 0) {
+            await Promise.all(
+              missingEntries.map(async (entry) => {
+                try {
+                  await result.layer.create(entry);
+                } catch (error) {
+                  // Ignore duplicate key errors as it means it was already populated
+                  if (!(error instanceof DuplicateKeyError)) {
+                    throw error;
+                  }
+                }
+              }),
+            );
+          }
+        }),
+      );
+
+      return mergedEntries;
     },
 
     /**
