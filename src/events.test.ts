@@ -46,7 +46,7 @@ describe("Storage Events", () => {
       storage.on("delete", callback);
       await storage.delete("1");
 
-      expect(callback).toHaveBeenCalledWith(user);
+      expect(callback).toHaveBeenCalledWith({ id: "1" });
     });
 
     it("should stop emitting after cleanup", async () => {

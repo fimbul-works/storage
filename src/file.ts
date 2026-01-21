@@ -9,6 +9,7 @@ import {
   KeyNotFoundError,
   type SerializationAdapter,
   type Storage,
+  type StorageEvent,
 } from "./types.js";
 
 /**
@@ -80,6 +81,12 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
 ): Storage<T, K> {
   const { path, adapter = jsonFileAdapter, keyFromStorage = (raw: string) => raw as T[K] } = options;
 
+  const listeners: Record<string, Set<(entry: T) => void>> = {
+    create: new Set(),
+    update: new Set(),
+    delete: new Set(),
+  };
+
   // Create directory if no found
   if (!existsSync(path)) {
     mkdirSync(path, {
@@ -103,11 +110,6 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
   };
 
   const filePattern = createFilePattern();
-  const listeners: Record<string, Set<(entry: T) => void>> = {
-    create: new Set(),
-    update: new Set(),
-    delete: new Set(),
-  };
 
   let watcherInitialized = false;
   let watcher: ReturnType<typeof watch> | undefined;
@@ -285,11 +287,11 @@ export function createFileStorage<T, K extends keyof T = keyof T>(
     /**
      * Subscribes to storage events.
      *
-     * @param event - The event type: "create", "update", or "delete"
-     * @param callback - Function called with the document
-     * @returns A cleanup function to unsubscribe from the listener
+     * @param {StorageEvent} event - The event type: "create", "update", or "delete"
+     * @param {(entry: T) => void} callback - Function called with the document or last known version of the document
+     * @returns {() => void} A cleanup function to unsubscribe from the listener
      */
-    on(event: "create" | "update" | "delete", callback: (entry: T) => void): () => void {
+    on(event: StorageEvent, callback: (entry: T) => void): () => void {
       if (!watcherInitialized) {
         watcher = watch(path, {
           ignoreInitial: true,

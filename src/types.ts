@@ -86,11 +86,11 @@ export interface Storage<T, K extends keyof T = keyof T> {
   /**
    * Subscribes to storage events.
    *
-   * @param event - The event type: "create", "update", or "delete"
-   * @param callback - Function called with the document or last known version of the document
-   * @returns A cleanup function to unsubscribe from the listener
+   * @param {StorageEvent} event - The event type: "create", "update", or "delete"
+   * @param {(entry: T) => void} callback - Function called with the document or last known version of the document
+   * @returns {() => void} A cleanup function to unsubscribe from the listener
    */
-  on(event: "create" | "update" | "delete", callback: (entry: T) => void): () => void;
+  on(event: StorageEvent, callback: (entry: T) => void): () => void;
 }
 
 /**

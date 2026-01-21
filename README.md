@@ -13,7 +13,6 @@ A type-safe, abstract storage system for TypeScript with a unified interface for
 - 🔌 **Custom Serialization** — Pluggable adapters for different data formats
 - 📊 **Efficient Data Access** — Stream large datasets, batch retrieve entries, or list all keys
 - 🔔 **Real-time Events** — Subscribe to document creation, updates, and deletions
-- ⚠️ **Error Handling** — Specific error types for duplicate keys and missing entries
 
 ## Installation
 

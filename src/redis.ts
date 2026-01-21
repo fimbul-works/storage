@@ -6,6 +6,7 @@ import {
   KeyNotFoundError,
   type SerializationAdapter,
   type Storage,
+  type StorageEvent,
 } from "./types.js";
 
 /**
@@ -81,6 +82,13 @@ export async function createRedisStorage<T, K extends keyof T>(
 
   const makeKey = (key: T[K]): RedisArgument => `${keyPrefix}${key}`;
 
+  const listeners: Record<StorageEvent, Set<(entry: T) => void>> = {
+    create: new Set(),
+    update: new Set(),
+    delete: new Set(),
+  };
+  const emit = (event: StorageEvent, entry: T) => listeners[event].forEach((callback) => callback(entry));
+
   return {
     /**
      * Read-only field that is used as the key.
@@ -115,6 +123,7 @@ export async function createRedisStorage<T, K extends keyof T>(
       }
 
       await client.set(redisKey, serializationAdapter.serialize(entry));
+      emit("create", entry);
     },
 
     /**
@@ -251,6 +260,7 @@ export async function createRedisStorage<T, K extends keyof T>(
       }
 
       await client.set(redisKey, serializationAdapter.serialize(entry));
+      emit("update", entry);
     },
 
     /**
@@ -268,19 +278,22 @@ export async function createRedisStorage<T, K extends keyof T>(
       }
 
       await client.del(redisKey);
+      emit("delete", { [keyField]: key } as unknown as T);
     },
 
     /**
      * Subscribes to storage events.
      * Note: Redis events are currently unimplemented.
      *
-     * @param event - The event type
-     * @param callback - The callback function
-     * @returns A cleanup function
+     * @param {StorageEvent} event - The event type: "create", "update", or "delete"
+     * @param {(entry: T) => void} callback - Function called with the document or last known version of the document
+     * @returns {() => void} A cleanup function to unsubscribe from the listener
      */
-    on(_event: "create" | "update" | "delete", _callback: (entry: T) => void): () => void {
-      console.log(`Redis storage events are currently unimplemented`);
-      return () => {};
+    on(event: StorageEvent, callback: (entry: T) => void): () => void {
+      listeners[event].add(callback);
+      return () => {
+        listeners[event].delete(callback);
+      };
     },
 
     /**

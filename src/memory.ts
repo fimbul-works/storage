@@ -1,4 +1,4 @@
-import { DuplicateKeyError, KeyNotFoundError, type Storage } from "./types.js";
+import { DuplicateKeyError, KeyNotFoundError, type Storage, type StorageEvent } from "./types.js";
 
 /**
  * Configuration options for in-memory storage.
@@ -36,19 +36,9 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(
   options?: MemoryStorageOptions,
 ): Storage<T, K> {
   const { ttl, now = Date.now } = options ?? {};
+
   const data = new Map<T[K], T>();
   const expirations = ttl ? new Map<T[K], number>() : undefined;
-  const listeners: Record<string, Set<(entry: T) => void>> = {
-    create: new Set(),
-    update: new Set(),
-    delete: new Set(),
-  };
-
-  const emit = (event: string, entry: T) => {
-    for (const callback of listeners[event]) {
-      callback(entry);
-    }
-  };
 
   /**
    * Removes expired entries from the storage.
@@ -78,6 +68,13 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(
 
     return expiration <= now();
   };
+
+  const listeners: Record<StorageEvent, Set<(entry: T) => void>> = {
+    create: new Set(),
+    update: new Set(),
+    delete: new Set(),
+  };
+  const emit = (event: StorageEvent, entry: T) => listeners[event].forEach((callback) => callback(entry));
 
   return {
     /**
@@ -228,20 +225,19 @@ export function createMemoryStorage<T, K extends keyof T = keyof T>(
         throw new KeyNotFoundError(`Key "${key}" not found`);
       }
 
-      const entry = data.get(key)!;
       data.delete(key);
       expirations?.delete(key);
-      emit("delete", entry);
+      emit("delete", { [keyField]: key } as unknown as T);
     },
 
     /**
      * Subscribes to storage events.
      *
-     * @param event - The event type: "create", "update", or "delete"
-     * @param callback - Function called with the document
-     * @returns A cleanup function to unsubscribe from the listener
+     * @param {StorageEvent} event - The event type: "create", "update", or "delete"
+     * @param {(entry: T) => void} callback - Function called with the document or last known version of the document
+     * @returns {() => void} A cleanup function to unsubscribe from the listener
      */
-    on(event: "create" | "update" | "delete", callback: (entry: T) => void): () => void {
+    on(event: StorageEvent, callback: (entry: T) => void): () => void {
       listeners[event].add(callback);
       return () => {
         listeners[event].delete(callback);
