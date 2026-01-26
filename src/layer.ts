@@ -18,7 +18,7 @@ import { DuplicateKeyError, KeyNotFoundError, type Storage, type StorageEvent } 
  * @throws {Error} If no layers are provided
  * @throws {Error} If layers have different key fields
  */
-export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>[]): Storage<T, K> {
+export function createLayeredStorage<T, K extends keyof T = keyof T>(layers: Storage<T, K>[]): Storage<T, K> {
   if (layers.length === 0) {
     throw new Error("At least one storage layer is required");
   }
@@ -252,14 +252,14 @@ export function createLayeredStorage<T, K extends keyof T>(layers: Storage<T, K>
 
     /**
      * Subscribes to storage events.
-     * Layered storage proxies events from the top layer.
+     * Layered storage proxies events from the bottom layer.
      *
      * @param {StorageEvent} event - The event type: "create", "update", or "delete"
      * @param {(entry: T) => void} callback - Function called with the document or last known version of the document
      * @returns {() => void} A cleanup function to unsubscribe from the listener
      */
     on(event: StorageEvent, callback: (entry: T) => void): () => void {
-      return layers[0].on(event, callback);
+      return layers[layers.length - 1].on(event, callback);
     },
   };
 
